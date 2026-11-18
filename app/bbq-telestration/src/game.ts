@@ -320,16 +320,16 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
   const total = steps - 1;
   return list.map((b) => {
     const owner = b.ownerNick ? `${esc(b.ownerNick)}의 스케치북` : `스케치북 ${b.idx + 1}`;
-    const cards = [`<li class=”slide word”><span class=”lbl”>처음 제시어</span><b>${esc(b.word)}</b><span class=”lbl”>${owner} · 옆으로 넘겨 보세요 →</span></li>`];
+    const cards = [`<li class="slide word"><span class="lbl">처음 제시어</span><b>${esc(b.word)}</b><span class="lbl">${owner} · 옆으로 넘겨 보세요 →</span></li>`];
     for (let s = 1; s <= total; s++) {
       const e = b.entries.find((x) => x.step === s), kindLabel = s % 2 === 1 ? '그림' : '추측';
-      if (!e) { cards.push(`<li class=”slide”><span class=”lbl”>${s}칸 · ${kindLabel}</span><p class=”said missing”>시간 안에 못 냈어요</p></li>`); continue; }
-      const body = e.kind === 'draw' ? `<div class=”imgWrap”><img src=”${esc(e.content)}” alt=”${s}칸 그림” loading=”lazy” onerror=”this.parentNode.dataset.err='1'”></div>` : `<p class=”said”>”${esc(e.content)}”</p>`;
+      if (!e) { cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${kindLabel}</span><p class="said missing">시간 안에 못 냈어요</p></li>`); continue; }
+      const body = e.kind === 'draw' ? `<div class="imgWrap"><img src="${esc(e.content)}" alt="${s}칸 그림" loading="lazy" onerror="this.parentNode.dataset.err='1'"></div>` : `<p class="said">“${esc(e.content)}”</p>`;
       const who = e.authorNick ? `<b>${esc(e.authorNick)}</b>의 ${kindLabel}` : e.mine ? `<b>내</b> ${kindLabel}` : kindLabel;
-      const foot = e.matched ? '<div class=”matched”>정답! ✓</div>' : '';
-      cards.push(`<li class=”slide”><span class=”lbl”>${s}칸 · ${who}</span>${body}${foot}</li>`);
+      const foot = e.matched ? '<div class="matched">정답! ✓</div>' : '';
+      cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${who}</span>${body}${foot}</li>`);
     }
-    return `<section class=”lane”><h3><span>${b.idx + 1}</span>${esc(b.word)}</h3><ol class=”track”>${cards.join('')}</ol></section>`;
+    return `<section class="lane"><h3><span>${b.idx + 1}</span>${esc(b.word)}</h3><ol class="track">${cards.join('')}</ol></section>`;
   }).join('');
 }
 
