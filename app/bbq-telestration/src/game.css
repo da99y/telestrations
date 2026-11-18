@@ -116,12 +116,6 @@ input:focus-visible,button:focus-visible{outline:2px solid var(--flame);outline-
 .board .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .board .pt{font-family:var(--mono)}
 .board li.me{outline:1px solid var(--flame)}
-.board li.lose{background:rgba(62,230,193,.12);outline:1px solid rgba(62,230,193,.5)}
-.board li.lose .pt{color:var(--ember)}
-.losers{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
-.loser{font-family:var(--display);font-size:30px;padding:8px 18px;border-radius:12px;background:var(--ember);color:var(--char);animation:pop .5s cubic-bezier(.2,1.6,.4,1) both}
-.loser:nth-child(2){animation-delay:.25s}.loser:nth-child(3){animation-delay:.5s}.loser:nth-child(4){animation-delay:.75s}
-@keyframes pop{from{transform:scale(.4);opacity:.2}to{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .page .got{font-size:12px;font-weight:700;color:var(--ember);white-space:nowrap}
 #rBooks{align-self:stretch;text-align:left}
@@ -141,17 +135,6 @@ header{display:flex;flex-direction:column;gap:2px}
 .steps li.now::before{background:var(--ember);border-color:var(--ember);color:var(--char)}
 .steps li small{grid-column:2;font-size:12px;font-weight:400;color:var(--muted);text-decoration:none}
 
-/* 결과: 상위·하위 */
-.podium{display:flex;flex-direction:column;gap:12px;align-self:stretch}
-.tier{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px;border-radius:14px;background:var(--ash);border:1px solid var(--line)}
-.tier .tlabel{font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.06em}
-.tier.top{border-color:var(--ember)}
-.tier.top .tlabel{color:var(--ember)}
-.tier.bottom .loser{background:var(--ash2);color:var(--text);border:1px solid var(--line)}
-.board li.top{background:rgba(62,230,193,.14);outline:1px solid rgba(62,230,193,.6)}
-.board li.top .pt,.board li.top .tm{color:var(--ember)}
-.board li.lose{background:rgba(238,247,244,.05);outline:1px dashed var(--muted)}
-.board li.lose .pt,.board li.lose .tm{color:var(--text)}
 /* 지난 게임 결과 */
 #history[data-off]{display:none!important}
 .histList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
@@ -160,8 +143,6 @@ header{display:flex;flex-direction:column;gap:2px}
 .histItem b{font-family:var(--display);font-weight:400;font-size:18px}
 .histItem span{color:var(--muted);font-size:13px;font-family:var(--mono)}
 .histItem:focus-visible{outline:2px solid var(--flame);outline-offset:2px}
-.histTiers{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted)}
-.histTiers b{color:var(--text)}
 .hist .board li{grid-template-columns:1.8em 1fr auto}
 
 /* 투표 레인: 제시어마다 한 줄, 옆으로 스와이프 */
@@ -180,17 +161,7 @@ header{display:flex;flex-direction:column;gap:2px}
 .slide.word{flex-basis:36%;background:var(--ember);border-color:var(--ember);color:var(--char);justify-content:center;align-items:center;text-align:center}
 .slide.word b{font-family:var(--display);font-weight:400;font-size:24px;line-height:1.15;word-break:keep-all}
 .slide.word .lbl{color:rgba(5,6,6,.7)}
-.votes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.votes.mine{display:flex;justify-content:center;padding:10px 0}
-.vt{all:unset;cursor:pointer;text-align:center;font-weight:700;padding:9px 0;border-radius:10px;border:1px solid var(--line);font-size:15px;background:var(--ash2)}
-.vt.good.on{background:var(--ember);border-color:var(--ember);color:var(--char)}
-.vt.bad.on{background:var(--text);border-color:var(--text);color:var(--char)}
-.vt[disabled]{opacity:.35;pointer-events:none}
-.vt:focus-visible{outline:2px solid var(--flame);outline-offset:2px}
-.tally{display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:4px 2px}
-.tally .g{color:var(--ember)}
-.tally .b{color:var(--muted)}
-.prompt .inl{display:inline;font-family:var(--body);font-size:inherit;color:var(--ember)}
+.matched{font-size:12px;font-weight:700;color:var(--ember);padding:2px 0}
 
 /* 칸 수: 사람 수만큼 / 직접 설정 */
 .seg{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
@@ -203,8 +174,6 @@ header{display:flex;flex-direction:column;gap:2px}
 
 /* 판이 없을 때 진행자 메뉴 제목 */
 .host .eyebrow.htitle{font-family:var(--display);font-weight:400;font-size:24px;letter-spacing:0;color:var(--text)}
-.tally .m{color:var(--text);font-size:12px}
-.board .nm small{display:block;font-size:11px;font-weight:400;color:var(--muted);white-space:normal}
 .histList .lanes{margin-top:6px}
 .histList .track{margin:0 -12px;padding-inline:12px}
 

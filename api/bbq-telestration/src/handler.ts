@@ -161,7 +161,7 @@ function phaseOf(g: Game | null, now: number): Phase {
   if (!g || g.status === 'cancelled') return { kind: 'none' };
   if (g.status === 'lobby') return { kind: 'lobby' };
   if (g.status === 'finished') return { kind: 'done' };
-  if (g.status === 'voting') return now < (g.voteEnd ?? 0) ? { kind: 'voting', endsAt: g.voteEnd! } : { kind: 'done' };
+  if (g.status === 'voting') return { kind: 'done' };
   const start = g.stepStart ?? now;
   if (now < start) return { kind: 'wait', k: g.curStep, startsAt: start };
   const end = start + durOf(g, g.curStep);
@@ -202,8 +202,8 @@ function advance(env: Env, g: Game | null, now: number): Game | null {
     );
   } else {
     env.db.query(
-      `UPDATE bbq_telestration__matches SET status = $1, vote_end = $2 WHERE id = $3 AND cur_step = $4 AND status = $5`,
-      ['voting', now + g.voteSec * 1000, g.id, k, 'running'],
+      `UPDATE bbq_telestration__matches SET status = $1 WHERE id = $2 AND cur_step = $3 AND status = $4`,
+      ['finished', g.id, k, 'running'],
     );
   }
   return currentGame(env);
@@ -235,24 +235,11 @@ function pagesOf(env: Env, gameId: number, book: number | null, withContent: boo
     : env.db.query(`SELECT ${cols} FROM bbq_telestration__pages WHERE game_id = $1 AND book = $2 ORDER BY step ASC`, [gameId, book]);
   return rows.map((r) => ({ id: Number(r.id), book: Number(r.book), step: Number(r.step), authorId: Number(r.author_id), kind: String(r.kind), content: withContent ? String(r.content) : '' }));
 }
-// 표는 marks2(kind: good=띵작, bad=망작). 예전 marks 는 더 안 쓴다.
-type Mark = { voterId: number; pageId: number; kind: 'good' | 'bad' };
-function activeMarks(env: Env, gameId: number): Mark[] {
-  const { rows } = env.db.query(`SELECT voter_id, page_id, kind FROM bbq_telestration__marks2 WHERE game_id = $1 AND deleted_at IS NULL`, [gameId]);
-  return rows.map((r) => ({ voterId: Number(r.voter_id), pageId: Number(r.page_id), kind: r.kind === 'bad' ? 'bad' : 'good' }));
-}
-function countByPage(marks: Mark[]) {
-  const c: Record<number, { good: number; bad: number }> = {};
-  marks.forEach((m) => { (c[m.pageId] ??= { good: 0, bad: 0 })[m.kind]++; });
-  return c;
-}
-
 // 점수(결과 화면·지난 결과 공통):
 //  - 맞춤: 추측이 앞사람이 보고 그린 말(제시어나 그 앞 추측)과 같으면 추측한 사람 +1
 //  - 전달: 그 경우 그림을 그린 사람도 +1(뒷사람이 맞히게 그렸으니까)
 //  - 완주: 스케치북의 마지막 추측이 처음 제시어와 같으면 스케치북 주인 +1
-//  - 띵작 표 하나에 +1, 망작 표 하나에 -1
-// 같은지는 띄어쓰기·문장부호를 빼고 비교한다. 동점이면 띵작 많은 순 → 판마다 정해지는 추첨 순서.
+// 같은지는 띄어쓰기·문장부호를 빼고 비교한다. 동점이면 판마다 정해지는 추첨 순서.
 const norm = (t: string) => t.replace(/[\s.,!?~'"“”…·]/g, '').toLowerCase();
 function bookScores(g: Game, pages: Page[]) {
   const pts: Record<number, { guess: number; draw: number; book: number }> = {};
@@ -277,17 +264,13 @@ function bookScores(g: Game, pages: Page[]) {
 }
 function results(env: Env, g: Game, list: Player[]) {
   const pages = pagesOf(env, g.id, null, true, true); // draw JPEG 제외 — guess 텍스트만으로 점수 계산
-  const authors: Record<number, number> = {};
-  pages.forEach((e) => { authors[e.id] = e.authorId; });
-  const got: Record<number, { good: number; bad: number }> = {};
-  activeMarks(env, g.id).forEach((v) => { const a = authors[v.pageId]; if (a != null) (got[a] ??= { good: 0, bad: 0 })[v.kind]++; });
   const { pts } = bookScores(g, pages);
   return seated(list)
     .map((p) => {
-      const v = got[p.id] ?? { good: 0, bad: 0 }, x = pts[p.id] ?? { guess: 0, draw: 0, book: 0 };
-      return { id: p.id, nick: p.nick, good: v.good, bad: v.bad, guess: x.guess, draw: x.draw, book: x.book, score: x.guess + x.draw + x.book + v.good - v.bad };
+      const x = pts[p.id] ?? { guess: 0, draw: 0, book: 0 };
+      return { id: p.id, nick: p.nick, guess: x.guess, draw: x.draw, book: x.book, score: x.guess + x.draw + x.book };
     })
-    .sort((a, b) => b.score - a.score || b.good - a.good || hash(g.id + ':' + a.id) - hash(g.id + ':' + b.id));
+    .sort((a, b) => b.score - a.score || hash(g.id + ':' + a.id) - hash(g.id + ':' + b.id));
 }
 
 // 지난 판 요약(결과 화면과 같은 계산 — 점수 순).
@@ -295,17 +278,9 @@ function summaryOf(env: Env, g: Game, now: number): Summary | null {
   if (phaseOf(g, now).kind !== 'done') return null;
   const res = results(env, g, playersOf(env, g.id));
   if (!res.length) return null;
-  return pack(g.id, g.stepStart, g.penalty, res.map((r) => ({ nick: r.nick, label: `${r.score}점` })));
+  return { id: g.id, at: g.stepStart, count: res.length, board: res.map((r) => ({ nick: r.nick, label: `${r.score}점` })) };
 }
-// 상위·하위 k명(겹치지 않게 최대 절반씩). ord 는 잘한 순서.
-function pack(id: number, at: number | null, penalty: number, ord: { nick: string; label: string }[]): Summary {
-  const k = Math.min(penalty, Math.floor(ord.length / 2)), n = ord.length;
-  return {
-    id, at, count: n, top: ord.slice(0, k).map((x) => x.nick), bottom: ord.slice(n - k).reverse().map((x) => x.nick),
-    board: ord.map((x, i) => ({ ...x, tag: i < k ? 'top' : i >= n - k ? 'bottom' : '' })),
-  };
-}
-type Summary = { id: number; at: number | null; count: number; top: string[]; bottom: string[]; board: { nick: string; label: string; tag: string }[] };
+type Summary = { id: number; at: number | null; count: number; board: { nick: string; label: string }[] };
 
 // 화면을 보고 있는지: /state 를 부를 때마다 seen_at 을 갱신하고, AWAY_MS 동안 없으면 자리 비움.
 // 앱은 화면이 가려지면 폴링을 멈춘다. 가상 참가자(bot- 키)는 진행자 화면이 대신 움직이니 항상 있는 걸로 친다.
@@ -361,9 +336,6 @@ export function handle(req: Req, env: Env) {
       players: list.map((p) => ({ id: p.id, nick: p.nick, seat: p.seat, joinedAt: p.joinedAt, away: away.has(p.id) })),
     };
     if (ph.kind === 'step' || ph.kind === 'wait') out.submitted = submittedCount(env, g.id, g.curStep);
-    if (ph.kind === 'voting' || ph.kind === 'done') {
-      out.myVotes = me ? activeMarks(env, g.id).filter((v) => v.voterId === me.id).map((v) => ({ pageId: v.pageId, kind: v.kind })) : [];
-    }
     if (ph.kind === 'done') out.results = results(env, g, list);
     return ok(out);
   }
@@ -438,15 +410,15 @@ export function handle(req: Req, env: Env) {
     return ok({});
   }
 
-  // 공개용 요약: 스케치북마다 처음 제시어 + 마지막 칸. 투표 중엔 주인 이름을 숨기고, 결과가 나오면 보여준다.
+  // 공개용 요약: 스케치북마다 처음 제시어 + 마지막 칸.
   if (req.method === 'GET' && req.path === '/books') {
     const g = currentGame(env), ph = phaseOf(g, now);
-    if (!g || (ph.kind !== 'voting' && ph.kind !== 'done')) return bad('아직 공개 전이에요.', 409);
-    const list = seated(playersOf(env, g.id)), named = ph.kind === 'done';
+    if (!g || ph.kind !== 'done') return bad('아직 공개 전이에요.', 409);
+    const list = seated(playersOf(env, g.id));
     const last: Record<number, Page> = {};
     pagesOf(env, g.id, null, true).forEach((e) => { if (!last[e.book] || e.step > last[e.book].step) last[e.book] = e; });
     return ok({
-      books: list.map((p, idx) => ({ idx, ownerNick: named ? p.nick : null, word: g.words[idx] ?? '', last: last[idx] ? { kind: last[idx].kind, content: last[idx].content, step: last[idx].step } : null })),
+      books: list.map((p, idx) => ({ idx, ownerNick: p.nick, word: g.words[idx] ?? '', last: last[idx] ? { kind: last[idx].kind, content: last[idx].content, step: last[idx].step } : null })),
     });
   }
 
@@ -457,64 +429,39 @@ export function handle(req: Req, env: Env) {
     const gid = readInt(req.query.gameId, 0, 1e9, 0);
     const g = gid ? recentGames(env, 30).find((x) => x.id === gid) ?? null : currentGame(env), ph = phaseOf(g, now);
     if (gid && ph.kind !== 'done') return bad('끝난 판만 볼 수 있어요.', 409);
-    if (!g || (ph.kind !== 'voting' && ph.kind !== 'done')) return bad('아직 공개 전이에요.', 409);
+    if (!g || ph.kind !== 'done') return bad('아직 공개 전이에요.', 409);
     const all = playersOf(env, g.id), list = seated(all), idx = readInt(req.query.idx, 0, Math.max(0, list.length - 1), 0);
-    const me = all.find((p) => p.key === readKey(req.query.key)), named = ph.kind === 'done';
+    const me = all.find((p) => p.key === readKey(req.query.key));
     const nick: Record<number, string> = {};
     list.forEach((p) => { nick[p.id] = p.nick; });
-    const got = named ? countByPage(activeMarks(env, g.id)) : {};
     // 맞춤 표시는 이 권만 보고 계산한다(bookScores 는 권별로 독립).
-    const raw = pagesOf(env, g.id, idx, true), matched = named ? bookScores(g, raw).matched : new Set<number>();
+    const raw = pagesOf(env, g.id, idx, true), matched = bookScores(g, raw).matched;
     const pages = raw.map((e) => ({
       id: e.id, step: e.step, kind: e.kind, content: e.content, mine: !!me && e.authorId === me.id,
-      authorNick: nick[e.authorId] ?? '',
-      ...(named ? { good: got[e.id]?.good ?? 0, bad: got[e.id]?.bad ?? 0, matched: matched.has(e.id) } : {}),
+      authorNick: nick[e.authorId] ?? '', matched: matched.has(e.id),
     }));
     return ok({ idx, word: g.words[idx] ?? '', ownerNick: list[idx]?.nick ?? '', entries: pages });
   }
 
-  // 스케치북 전부(투표 화면 레인용). 투표 중에도 이름을 보여주고, 결과가 나오면 표 수도 추가.
+  // 스케치북 전부.
   if (req.method === 'GET' && req.path === '/allbooks') {
     const g = currentGame(env), ph = phaseOf(g, now);
-    if (!g || (ph.kind !== 'voting' && ph.kind !== 'done')) return bad('아직 공개 전이에요.', 409);
-    const all = playersOf(env, g.id), list = seated(all), named = ph.kind === 'done';
+    if (!g || ph.kind !== 'done') return bad('아직 공개 전이에요.', 409);
+    const all = playersOf(env, g.id), list = seated(all);
     const me = all.find((p) => p.key === readKey(req.query.key));
     const nick: Record<number, string> = {};
     list.forEach((p) => { nick[p.id] = p.nick; });
-    const got = named ? countByPage(activeMarks(env, g.id)) : {};
     const pages = pagesOf(env, g.id, null, true);
-    const matched = named ? bookScores(g, pages).matched : new Set<number>();
+    const matched = bookScores(g, pages).matched;
     return ok({
       books: list.map((p, idx) => ({
         idx, word: g.words[idx] ?? '', ownerNick: p.nick,
         entries: pages.filter((e) => e.book === idx).map((e) => ({
           id: e.id, step: e.step, kind: e.kind, content: e.content, mine: !!me && e.authorId === me.id,
-          authorNick: nick[e.authorId] ?? '',
-          ...(named ? { good: got[e.id]?.good ?? 0, bad: got[e.id]?.bad ?? 0, matched: matched.has(e.id) } : {}),
+          authorNick: nick[e.authorId] ?? '', matched: matched.has(e.id),
         })),
       })),
     });
-  }
-
-  if (req.method === 'POST' && req.path === '/vote') {
-    const key = readKey(body.key), pageId = Number(body.entryId), on = body.on === true, kind = body.kind === 'bad' ? 'bad' : 'good';
-    const g = currentGame(env), ph = phaseOf(g, now);
-    if (!g || ph.kind !== 'voting') return bad('투표 시간이 끝났어요.', 409);
-    const me = playersOf(env, g.id).find((p) => p.key === key && p.seat != null);
-    if (!me) return bad('이번 판 참가자만 투표할 수 있어요.', 403);
-    const { rows: found } = env.db.query(`SELECT author_id FROM bbq_telestration__pages WHERE id = $1 AND game_id = $2`, [pageId, g.id]);
-    if (!found.length) return bad('없는 그림이에요.', 404);
-    if (Number(found[0].author_id) === me.id) return bad('내 작품에는 표를 줄 수 없어요.', 403);
-    const mine = activeMarks(env, g.id).filter((v) => v.voterId === me.id);
-    const onPage = mine.find((v) => v.pageId === pageId);
-    // 한 칸에는 띵작이나 망작 중 하나만. 다른 쪽 표가 있으면 먼저 뺀다.
-    const drop = () => env.db.query(`UPDATE bbq_telestration__marks2 SET deleted_at = NOW() WHERE game_id = $1 AND voter_id = $2 AND page_id = $3 AND deleted_at IS NULL`, [g.id, me.id, pageId]);
-    if (on) {
-      if (onPage?.kind === kind) return ok({});
-      if (onPage) drop(); // beta DB 는 DELETE 가 막혀 있어 soft delete 로 뺀다.
-      env.db.query(`INSERT INTO bbq_telestration__marks2 (game_id, voter_id, page_id, kind) VALUES ($1, $2, $3, $4)`, [g.id, me.id, pageId, kind]);
-    } else if (onPage) drop();
-    return ok({});
   }
 
   // 지난 게임 결과(최근 10판, 오래된 판부터 1번째).
@@ -569,11 +516,6 @@ export function handle(req: Req, env: Env) {
         `UPDATE bbq_telestration__matches SET status = $1, cur_step = $2, step_start = $3, words = $4, steps = $5 WHERE id = $6`,
         ['running', 1, now + START_DELAY_MS, JSON.stringify(words), steps, g.id],
       );
-      return ok({});
-    }
-    if (req.path === '/host/finish') {
-      if (ph.kind !== 'voting') return bad('투표 중일 때만 결과를 낼 수 있어요.', 409);
-      env.db.query(`UPDATE bbq_telestration__matches SET status = $1 WHERE id = $2`, ['finished', g.id]);
       return ok({});
     }
     if (req.path === '/host/cancel') {

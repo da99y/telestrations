@@ -5,24 +5,22 @@ import { ApiError, apiClient } from './lib/apiClient';
 import { botDrawing, botGuess, rememberBotDrawing } from './bots';
 
 type Game = {
-  id: number; status: string; steps: number; dSec: number; gSec: number; voteSec: number; penalty: number; tier?: string;
-  curStep: number; stepStart: number | null; voteEnd: number | null; books: number;
+  id: number; status: string; steps: number; dSec: number; gSec: number; tier?: string;
+  curStep: number; stepStart: number | null; books: number;
 };
 type Player = { away?: boolean; id: number; nick: string; seat: number | null; joinedAt: number };
-type Result = { id: number; nick: string; good: number; bad: number; guess: number; draw: number; book: number; score: number };
+type Result = { id: number; nick: string; guess: number; draw: number; book: number; score: number };
 type State = {
   now: number; game: Game | null; players: Player[]; meId: number | null; host: boolean; hostClaimable: boolean; canOpen?: boolean;
-  submitted?: number; myVotes?: { pageId: number; kind: 'good' | 'bad' }[]; results?: Result[];
+  submitted?: number; results?: Result[];
 };
 type Phase =
   | { kind: 'none' | 'lobby' | 'done' }
   | { kind: 'starting'; left: number }
   | { kind: 'wait'; k: number; left: number }
-  | { kind: 'step'; k: number; editing: boolean; left: number; dur: number }
-  | { kind: 'voting'; left: number };
+  | { kind: 'step'; k: number; editing: boolean; left: number; dur: number };
 type Task = { step: number; kind: 'draw' | 'guess'; book: number; ownerNick: string; prev: { kind: string; content: string } | null; mine: string | null; isFirst: boolean };
-// 투표 중엔 그린 사람이 비어 있고(mine 만), 결과가 나오면 authorNick·votes 가 채워진다.
-type BookEntry = { id: number; step: number; kind: string; content: string; mine: boolean; authorNick?: string; good?: number; bad?: number; matched?: boolean };
+type BookEntry = { id: number; step: number; kind: string; content: string; mine: boolean; authorNick?: string; matched?: boolean };
 
 const BASE = '/api/bbq-telestration';
 const POLL_MS = 1500;
@@ -83,7 +81,7 @@ function phase(): Phase {
   if (!g) return { kind: 'none' };
   if (g.status === 'lobby') return { kind: 'lobby' };
   if (g.status === 'finished') return { kind: 'done' };
-  if (g.status === 'voting') { const left = ((g.voteEnd ?? 0) - now()) / 1000; return left > 0 ? { kind: 'voting', left } : { kind: 'done' }; }
+  if (g.status === 'voting') return { kind: 'done' };
   const start = g.stepStart ?? now();
   if (now() < start) return g.curStep === 1 ? { kind: 'starting', left: (start - now()) / 1000 } : { kind: 'wait', k: g.curStep, left: (start - now()) / 1000 };
   const dur = g.curStep % 2 === 1 ? g.dSec : g.gSec;
@@ -95,10 +93,10 @@ const meOf = () => st?.players.find((p) => p.id === st?.meId);
 const seatedCount = () => (st?.players ?? []).filter((p) => p.seat != null).length;
 
 /* ---------- screens ---------- */
-const SCREENS = ['notice', 'lobby', 'draw', 'guess', 'wait', 'show', 'result'];
+const SCREENS = ['notice', 'lobby', 'draw', 'guess', 'wait', 'result'];
 let shown = 'notice';
 function show(id: string) {
-  document.getElementById('history')?.toggleAttribute('data-off', ['draw','guess','wait','show'].includes(id));
+  document.getElementById('history')?.toggleAttribute('data-off', ['draw','guess','wait'].includes(id));
   if (shown === id) return;
   shown = id; SCREENS.forEach((s) => ($('#' + s).hidden = s !== id)); window.scrollTo({ top: 0 });
   if (st) renderHost(phase());
@@ -120,7 +118,6 @@ function render() {
     if (ph.kind === 'step' && ph.editing) { void ensureTask(ph.k); return; }
     renderWait(ph); return;
   }
-  if (ph.kind === 'voting') { void renderVoting(ph); return; }
   renderResult();
 }
 
@@ -295,14 +292,13 @@ function setupCanvas() {
   });
 }
 
-/* ---------- voting: 제시어별 레인을 옆으로 넘기며 띵작/망작 ---------- */
+/* ---------- 결과: 스케치북 레인 ---------- */
+// 그림이 커서 한 번에 받으면 응답 크기 제한에 걸릴 수 있어 /book 으로 한 권씩 받는다.
 type LaneBook = { idx: number; word: string; ownerNick: string | null; entries: BookEntry[] };
 let lanes: LaneBook[] | null = null, lanesFor = '', lanesLoading = false;
 
-// named=false 는 투표 중(이름 숨김), true 는 결과(이름·표 수 공개).
-// 그림이 커서 한 번에 받으면 응답 크기 제한에 걸릴 수 있어 /book 으로 한 권씩 받는다.
-async function loadLanes(named: boolean) {
-  const key = `${st!.game!.id}:${named ? 'named' : 'anon'}`;
+async function loadLanes() {
+  const key = `${st!.game!.id}`;
   if (lanesFor === key) return true;
   if (lanesLoading) return false;
   lanesLoading = true;
@@ -315,65 +311,28 @@ async function loadLanes(named: boolean) {
   return lanesFor === key;
 }
 
-function lanesHTML(list: LaneBook[], named: boolean, steps = st!.game!.steps) {
+function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
   const total = steps - 1;
   return list.map((b) => {
     const owner = b.ownerNick ? `${esc(b.ownerNick)}의 스케치북` : `스케치북 ${b.idx + 1}`;
-    const cards = [`<li class="slide word"><span class="lbl">처음 제시어</span><b>${esc(b.word)}</b><span class="lbl">${owner} · 옆으로 넘겨 보세요 →</span></li>`];
+    const cards = [`<li class=”slide word”><span class=”lbl”>처음 제시어</span><b>${esc(b.word)}</b><span class=”lbl”>${owner} · 옆으로 넘겨 보세요 →</span></li>`];
     for (let s = 1; s <= total; s++) {
       const e = b.entries.find((x) => x.step === s), kindLabel = s % 2 === 1 ? '그림' : '추측';
-      if (!e) { cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${kindLabel}</span><p class="said missing">시간 안에 못 냈어요</p></li>`); continue; }
-      const body = e.kind === 'draw' ? `<img src="${esc(e.content)}" alt="${s}칸 그림" loading="lazy">` : `<p class="said">“${esc(e.content)}”</p>`;
-      const who = e.authorNick != null ? `<b>${esc(e.authorNick)}</b>의 ${kindLabel}` : e.mine ? `<b>내</b> ${kindLabel}` : kindLabel;
-      const foot = named ? `<div class="tally"><span class="g">👑 ${e.good ?? 0}</span>${e.matched ? '<span class="m">정답! +1</span>' : ''}<span class="b">💩 ${e.bad ?? 0}</span></div>`
-        : e.mine ? '<div class="votes mine"><span class="hint">내 작품에는 투표할 수 없어요</span></div>'
-        : `<div class="votes"><button class="vt good" type="button" data-e="${e.id}" data-k="good">👑 띵작</button><button class="vt bad" type="button" data-e="${e.id}" data-k="bad">💩 망작</button></div>`;
-      cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${who}</span>${body}${foot}</li>`);
+      if (!e) { cards.push(`<li class=”slide”><span class=”lbl”>${s}칸 · ${kindLabel}</span><p class=”said missing”>시간 안에 못 냈어요</p></li>`); continue; }
+      const body = e.kind === 'draw' ? `<img src=”${esc(e.content)}” alt=”${s}칸 그림” loading=”lazy”>` : `<p class=”said”>”${esc(e.content)}”</p>`;
+      const who = e.authorNick ? `<b>${esc(e.authorNick)}</b>의 ${kindLabel}` : e.mine ? `<b>내</b> ${kindLabel}` : kindLabel;
+      const foot = e.matched ? '<div class=”matched”>정답! ✓</div>' : '';
+      cards.push(`<li class=”slide”><span class=”lbl”>${s}칸 · ${who}</span>${body}${foot}</li>`);
     }
-    return `<section class="lane"><h3><span>${b.idx + 1}</span>${esc(b.word)}</h3><ol class="track">${cards.join('')}</ol></section>`;
+    return `<section class=”lane”><h3><span>${b.idx + 1}</span>${esc(b.word)}</h3><ol class=”track”>${cards.join('')}</ol></section>`;
   }).join('');
-}
-
-async function renderVoting(ph: Phase) {
-  if (ph.kind !== 'voting') return;
-  updateVoteClock(ph);
-  renderVotesLeft();
-  show('show');
-  if (await loadLanes(false) && $('#lanes').dataset.for !== lanesFor) { $('#lanes').innerHTML = lanesHTML(lanes!, false); $('#lanes').dataset.for = lanesFor; }
-  renderVoteButtons();
-}
-
-function updateVoteClock(ph: Phase) {
-  if (ph.kind !== 'voting') return;
-  $('#sLeft').textContent = `${Math.floor(ph.left / 60)}:${String(Math.max(0, Math.ceil(ph.left) % 60)).padStart(2, '0')}`;
-  $('#sBar').style.width = Math.max(0, (ph.left / (st?.game?.voteSec ?? 180)) * 100) + '%';
-}
-const myCount = (k: 'good' | 'bad') => (st?.myVotes ?? []).filter((v) => v.kind === k).length;
-// 띵작·망작은 개수 제한 없이 준다(한 칸에는 둘 중 하나만).
-function renderVotesLeft() {
-  $('#sVotes').textContent = meOf()?.seat != null ? `내가 준 표 👑 ${myCount('good')} · 💩 ${myCount('bad')}` : '구경 중';
-}
-function renderVoteButtons() {
-  const me = meOf(), mine = st!.myVotes ?? [];
-  document.querySelectorAll<HTMLButtonElement>('#lanes .vt').forEach((b) => {
-    const id = Number(b.dataset.e), k = b.dataset.k as 'good' | 'bad', on = mine.some((v) => v.pageId === id && v.kind === k);
-    b.hidden = me?.seat == null;
-    b.classList.toggle('on', on);
-    b.disabled = false;
-    b.textContent = on ? (k === 'good' ? '👑 띵작 ✓' : '💩 망작 ✓') : k === 'good' ? '👑 띵작' : '💩 망작';
-    b.setAttribute('aria-pressed', String(on));
-  });
 }
 
 /* ---------- result ---------- */
 function renderResult() {
-  const res = st!.results ?? [], n = res.length, k = renderPodium(res, st!.game!.penalty);
-  $('#finalBoard').innerHTML = res.map((r, i) => `<li class="${r.id === st!.meId ? 'me' : ''} ${i < k ? 'top' : i >= n - k ? 'lose' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(r.nick)}<small>맞춤 ${r.guess} · 전달 ${r.draw} · 완주 ${r.book} · 👑 ${r.good} · 💩 ${r.bad}</small></span><span class="pt">${r.score}점</span></li>`).join('');
-  $('#tieNote').hidden = false;
-  $('#tieNote').textContent = '맞춤·전달·완주 +1, 띵작 +1, 망작 −1을 더한 점수예요. 같으면 띵작이 많은 사람이 위, 그것까지 같으면 추첨이에요.';
   show('result');
   void (async () => {
-    if (await loadLanes(true) && $('#rLanes').dataset.for !== lanesFor) { $('#rLanes').innerHTML = lanesHTML(lanes!, true); $('#rLanes').dataset.for = lanesFor; }
+    if (await loadLanes() && $('#rLanes').dataset.for !== lanesFor) { $('#rLanes').innerHTML = lanesHTML(lanes!); $('#rLanes').dataset.for = lanesFor; }
   })();
 }
 
@@ -390,7 +349,6 @@ function renderHost(ph: Phase) {
     : ph.kind === 'starting' ? '곧 시작해요'
     : ph.kind === 'wait' ? `${ph.k} / ${g!.steps - 1}칸 준비 중`
     : ph.kind === 'step' ? `${ph.k} / ${g!.steps - 1}칸 · 제출 ${st!.submitted ?? 0} / ${seatedN}명 · 자동 진행 중`
-    : ph.kind === 'voting' ? `구경·투표 중 · ${Math.ceil(ph.left)}초 남음`
     : '결과 발표됨';
   const idle = ph.kind === 'none' || ph.kind === 'done';
   $('#hTitle').textContent = idle ? '새 판을 열어볼까요?' : '진행자 메뉴';
@@ -399,12 +357,11 @@ function renderHost(ph: Phase) {
   $('#hSettings').hidden = !idle; $('#hNew').hidden = !idle;
   $('#hBots').hidden = ph.kind !== 'lobby';
   const main = $<HTMLButtonElement>('#hMain');
-  main.hidden = !(ph.kind === 'lobby' || ph.kind === 'voting');
+  main.hidden = ph.kind !== 'lobby';
   main.disabled = ph.kind === 'lobby' && n < 2;
-  main.className = 'btn' + (ph.kind === 'voting' && confirmAction === 'finish' ? ' warn' : ' hot');
+  main.className = 'btn hot';
   const hostOut = ph.kind === 'lobby' && !meOf();
-  main.textContent = ph.kind === 'lobby' ? (n < 2 ? '2명 이상 모이면 시작할 수 있어요' : hostOut ? (confirmAction === 'start' ? '진행자는 빼고 시작할까요? 한 번 더 누르기' : '시작! (진행자도 하려면 먼저 아래에서 참가)') : '시작!')
-    : confirmAction === 'finish' ? '정말 투표를 마감할까요? 한 번 더 누르기' : '투표 바로 마감하고 결과 발표';
+  main.textContent = n < 2 ? '2명 이상 모이면 시작할 수 있어요' : hostOut ? (confirmAction === 'start' ? '진행자는 빼고 시작할까요? 한 번 더 누르기' : '시작! (진행자도 하려면 먼저 아래에서 참가)') : '시작!';
   const cancel = $('#hCancel');
   cancel.hidden = idle;
   cancel.textContent = confirmAction === 'cancel' ? '정말 이 판을 취소할까요? 한 번 더 누르기' : '이 판 취소하기';
@@ -436,17 +393,8 @@ const phaseName = () => phase().kind;
 // 화면을 안 보고 있는 참가자 수(서버가 15초 기준으로 알려준다)
 const awayCount = () => (st?.players ?? []).filter((p) => p.away).length;
 
-/* ---------- 결과: 상위·하위 k명(겹치지 않게 최대 절반씩) ---------- */
-function renderPodium(ord: { nick: string }[], penalty: number) {
-  const n = ord.length, k = Math.min(penalty, Math.floor(n / 2));
-  $('#kTop').textContent = String(k); $('#kBot').textContent = String(k);
-  $('#topList').innerHTML = k ? ord.slice(0, k).map((x) => `<span class="loser">${esc(x.nick)}</span>`).join('') : '<p class="sub">참가자가 2명 이상이어야 뽑을 수 있어요.</p>';
-  $('#botList').innerHTML = k ? ord.slice(n - k).reverse().map((x) => `<span class="loser">${esc(x.nick)}</span>`).join('') : '';
-  return k;
-}
-
 /* ---------- 지난 게임 결과 ---------- */
-type Hist = { no: number; id: number; at: number | null; count: number; top: string[]; bottom: string[]; board: { nick: string; label: string; tag: string }[] };
+type Hist = { no: number; id: number; at: number | null; count: number; board: { nick: string; label: string }[] };
 let hist: Hist[] = [], histFor = '', histOpen = -1;
 async function loadHistory() {
   const key = `${st?.game?.id ?? ''}:${st?.game?.status ?? ''}:${phaseName()}`;
@@ -471,15 +419,14 @@ function histLanesHTML(h: Hist) {
   if (!v || v === 'loading') { void loadHistLanes(h); return '<p class="hint">그림 불러오는 중…</p>'; }
   if (v === 'error') return '<p class="hint">그림을 불러오지 못했어요. 접었다 다시 펼쳐 보세요.</p>';
   const steps = Math.max(2, ...v.flatMap((b) => b.entries.map((e) => e.step))) + 1;
-  return `<div class="lanes">${lanesHTML(v, true, steps)}</div>`;
+  return `<div class="lanes">${lanesHTML(v, steps)}</div>`;
 }
 
 function renderHistory() {
   $('#history').hidden = !hist.length;
   const t = (ms: number | null) => (ms ? new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '');
   $('#histList').innerHTML = hist.map((h) => `<li><button class="histItem" type="button" data-id="${h.id}" aria-expanded="${histOpen === h.id}"><b>${h.no}번째 게임</b><span>${t(h.at)} · ${h.count}명 ${histOpen === h.id ? '▲' : '▼'}</span></button>`
-    + `<div class="histTiers"><span>상위 <b>${h.top.map(esc).join(', ') || '-'}</b></span><span>하위 <b>${h.bottom.map(esc).join(', ') || '-'}</b></span></div>`
-    + (histOpen === h.id ? `<ol class="board">${h.board.map((b, i) => `<li class="${b.tag === 'top' ? 'top' : b.tag === 'bottom' ? 'lose' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(b.nick)}</span><span class="pt">${esc(b.label)}</span></li>`).join('')}</ol>${histLanesHTML(h)}` : '')
+    + (histOpen === h.id ? `<ol class="board">${h.board.map((b, i) => `<li><span class="rk">${i + 1}</span><span class="nm">${esc(b.nick)}</span><span class="pt">${esc(b.label)}</span></li>`).join('')}</ol>${histLanesHTML(h)}` : '')
     + '</li>').join('');
 }
 
@@ -519,15 +466,6 @@ async function botAct(bot: Bot, step: number) {
     await apiClient.post(`${BASE}/submit`, { key: bot.key, step, content });
   } catch { /* 가상 참가자는 실패해도 조용히 넘어간다 */ }
 }
-async function botVote(bot: Bot, kind: 'good' | 'bad') {
-  try {
-    const total = st?.game?.books ?? 0; if (!total) return;
-    const b = await apiClient.get<{ entries: BookEntry[] }>(`${BASE}/book?key=${encodeURIComponent(bot.key)}&idx=${Math.floor(Math.random() * total)}`);
-    const candidates = b.entries.filter((e) => !e.mine);
-    if (candidates.length) await apiClient.post(`${BASE}/vote`, { key: bot.key, entryId: pick(candidates).id, kind, on: true });
-  } catch { /* 표가 다 떨어졌거나 투표 시간이 아니면 넘어간다 */ }
-}
-
 function runBots(ph: Phase) {
   if (!st?.host) return;
   const bots = loadBots();
@@ -540,12 +478,6 @@ function runBots(ph: Phase) {
       botDone.add(k);
       // 사람처럼 칸 시간의 20~70% 쯤 걸려서 낸다.
       setTimeout(() => void botAct(bot, ph.k), (0.2 + Math.random() * 0.5) * Math.max(2, ph.left - 1) * 1000);
-    } else if (ph.kind === 'voting') {
-      const k = `${gid}:${bot.key}:vote`;
-      if (botDone.has(k)) continue;
-      botDone.add(k);
-      const span = Math.max(5, ph.left - 5) * 1000;
-      (['good', 'good', 'bad', 'bad'] as const).forEach((k) => setTimeout(() => void botVote(bot, k), Math.random() * span));
     }
   }
 }
@@ -561,8 +493,6 @@ function tick() {
     if (task && task.step === ph.k && ph.left < 0.8 && !autoSent && (dirty || task.mine == null)) { autoSent = true; void submitTask(true); }
   } else if (ph.kind === 'starting' && shown === 'lobby' && meOf()) {
     $('#joinedTitle').textContent = `${Math.ceil(ph.left)}초 뒤 시작! 펜 준비하세요`;
-  } else if (ph.kind === 'voting') {
-    updateVoteClock(ph);
   }
 }
 
@@ -593,19 +523,6 @@ function bind() {
   $('#gText').addEventListener('input', () => { dirty = true; });
   $('#gText').addEventListener('keydown', (e) => { if (e.key === 'Enter') void submitTask(false); });
 
-  $('#lanes').addEventListener('click', async (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('.vt'); if (!b || b.disabled || !st) return;
-    const id = Number(b.dataset.e), k = b.dataset.k as 'good' | 'bad';
-    const on = !(st.myVotes ?? []).some((v) => v.pageId === id && v.kind === k);
-    b.disabled = true; $('#voteErr').hidden = true;
-    try {
-      await apiClient.post(`${BASE}/vote`, { key: myKey(), entryId: id, kind: k, on });
-      // 한 칸에는 띵작이나 망작 중 하나만
-      st.myVotes = (st.myVotes ?? []).filter((v) => v.pageId !== id).concat(on ? [{ pageId: id, kind: k }] : []);
-    } catch (err) { $('#voteErr').textContent = errText(err, '표를 저장하지 못했어요. 다시 눌러 주세요.'); $('#voteErr').hidden = false; }
-    renderVotesLeft(); renderVoteButtons();
-  });
-
   $('#claimHost').addEventListener('click', () => hostCall('claim'));
   $('#addBots').addEventListener('click', async () => {
     const b = $<HTMLButtonElement>('#addBots'); b.disabled = true;
@@ -615,13 +532,10 @@ function bind() {
   const newGame = () => hostCall('new', {
     tier: document.querySelector<HTMLInputElement>('input[name=tier]:checked')?.value ?? 'easy',
     steps: $<HTMLInputElement>('#stepsManual').checked ? num('#steps', 2, 99, 4) + 1 : 0 /* 0 = 사람 수만큼, +1 은 제시어 칸 */, dSec: num('#dSec', 20, 180, 40), gSec: num('#gSec', 10, 90, 20),
-    voteSec: num('#voteSec', 30, 600, 180), penalty: num('#penalty', 1, 10, 3),
   });
   $('#hNew').addEventListener('click', () => void newGame());
   $('#hMain').addEventListener('click', () => {
-    const ph = phase();
-    if (ph.kind === 'lobby') { if (meOf()) void hostCall('start'); else confirmTwice('start', () => void hostCall('start')); }
-    else if (ph.kind === 'voting') confirmTwice('finish', () => void hostCall('finish'));
+    if (meOf()) void hostCall('start'); else confirmTwice('start', () => void hostCall('start'));
   });
   $('#hCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
   $('#hbCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
