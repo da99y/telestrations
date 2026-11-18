@@ -335,15 +335,17 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
 }
 
 /* ---------- result ---------- */
+let laneTeam = ''; // 결과 화면 스케치북 팀 필터('' = 전체)
 function renderResult() {
   show('result');
+  $('#rLanes').dataset.team = laneTeam;
   // 팀전 결과 점수 박스
   const tr = st?.teamResults;
   const rts = $('#rTeamScore');
   if (tr && tr.length >= 2) {
     const sorted = tr.slice().sort((a, b) => b.score - a.score);
     rts.hidden = false;
-    rts.innerHTML = `<div class="teamScoreWrap">${sorted.map((t) => `<div class="teamBox ${t.team}">${t.team}팀<br><span class="teamPt">${t.score}점</span></div>`).join('<span class="teamVs">vs</span>')}</div>`;
+    rts.innerHTML = `<div class="teamScoreWrap">${sorted.map((t) => `<button type="button" class="teamBox ${t.team}${laneTeam === t.team ? ' on' : ''}" data-team="${t.team}" aria-pressed="${laneTeam === t.team}">${t.team}팀<br><span class="teamPt">${t.score}점</span></button>`).join('<span class="teamVs">vs</span>')}</div>`;
   } else {
     rts.hidden = true;
   }
@@ -536,6 +538,12 @@ function tick() {
 function bind() {
   const syncSteps = () => { $('#steps').hidden = !$<HTMLInputElement>('#stepsManual').checked; };
   $('#stepsAuto').addEventListener('change', syncSteps); $('#stepsManual').addEventListener('change', syncSteps);
+  $('#rTeamScore').addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('.teamBox')?.dataset.team;
+    if (!t) return;
+    laneTeam = laneTeam === t ? '' : t;
+    renderResult();
+  });
   $('#histList').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('.histItem'); if (!b) return;
     const id = Number(b.dataset.id); histOpen = histOpen === id ? -1 : id;

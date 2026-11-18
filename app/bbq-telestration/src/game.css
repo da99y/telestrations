@@ -206,8 +206,12 @@ header{display:flex;flex-direction:column;gap:2px}
 
 /* 팀전 결과 점수 */
 .teamScoreWrap{display:flex;align-items:center;justify-content:center;gap:12px;padding:4px 0}
-.teamBox{font-family:var(--display);font-weight:400;font-size:22px;line-height:1.2;padding:12px 20px;border-radius:14px;text-align:center;min-width:80px}
+.teamBox{all:unset;box-sizing:border-box;cursor:pointer;font-family:var(--display);font-weight:400;font-size:22px;line-height:1.2;padding:12px 20px;border-radius:14px;text-align:center;min-width:80px;border:2px solid transparent}
 .teamBox.A{background:var(--ember);color:var(--char)}
 .teamBox.B{background:var(--char);color:var(--text)}
+.teamBox:focus-visible{outline:2px solid var(--flame);outline-offset:2px}
+.teamScoreWrap:has(.teamBox.on) .teamBox:not(.on){opacity:.45}
+.teamBox.on{border-color:var(--text)}
+.lanes[data-team="A"] .lane.B,.lanes[data-team="B"] .lane.A{display:none}
 .teamPt{font-family:var(--mono);font-size:15px;display:block}
 .teamVs{font-size:13px;color:var(--muted)}
