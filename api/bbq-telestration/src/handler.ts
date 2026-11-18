@@ -450,8 +450,8 @@ export function handle(req: Req, env: Env) {
     });
   }
 
-  // 스케치북 한 권(제시어 + 칸 전부). 투표 중엔 누가 그렸는지 숨기고 "내 칸"만 알려준다.
-  // 결과가 나오면 그린 사람과 받은 띵작·망작 표 수까지 보여준다.
+  // 스케치북 한 권(제시어 + 칸 전부). 투표 중에도 그린 사람 이름을 보여준다.
+  // 결과가 나오면 받은 띵작·망작 표 수도 추가로 보여준다.
   // gameId 를 주면 끝난 지난 판(최근 30판 안)의 스케치북도 볼 수 있다.
   if (req.method === 'GET' && req.path === '/book') {
     const gid = readInt(req.query.gameId, 0, 1e9, 0);
@@ -467,12 +467,13 @@ export function handle(req: Req, env: Env) {
     const raw = pagesOf(env, g.id, idx, true), matched = named ? bookScores(g, raw).matched : new Set<number>();
     const pages = raw.map((e) => ({
       id: e.id, step: e.step, kind: e.kind, content: e.content, mine: !!me && e.authorId === me.id,
-      ...(named ? { authorNick: nick[e.authorId] ?? '', good: got[e.id]?.good ?? 0, bad: got[e.id]?.bad ?? 0, matched: matched.has(e.id) } : {}),
+      authorNick: nick[e.authorId] ?? '',
+      ...(named ? { good: got[e.id]?.good ?? 0, bad: got[e.id]?.bad ?? 0, matched: matched.has(e.id) } : {}),
     }));
-    return ok({ idx, word: g.words[idx] ?? '', ownerNick: named ? list[idx]?.nick ?? '' : null, entries: pages });
+    return ok({ idx, word: g.words[idx] ?? '', ownerNick: list[idx]?.nick ?? '', entries: pages });
   }
 
-  // 스케치북 전부(투표 화면 레인용). 투표 중엔 이름을 숨기고 내 칸만 mine, 결과가 나오면 이름·표 수까지.
+  // 스케치북 전부(투표 화면 레인용). 투표 중에도 이름을 보여주고, 결과가 나오면 표 수도 추가.
   if (req.method === 'GET' && req.path === '/allbooks') {
     const g = currentGame(env), ph = phaseOf(g, now);
     if (!g || (ph.kind !== 'voting' && ph.kind !== 'done')) return bad('아직 공개 전이에요.', 409);
@@ -485,10 +486,11 @@ export function handle(req: Req, env: Env) {
     const matched = named ? bookScores(g, pages).matched : new Set<number>();
     return ok({
       books: list.map((p, idx) => ({
-        idx, word: g.words[idx] ?? '', ownerNick: named ? p.nick : null,
+        idx, word: g.words[idx] ?? '', ownerNick: p.nick,
         entries: pages.filter((e) => e.book === idx).map((e) => ({
           id: e.id, step: e.step, kind: e.kind, content: e.content, mine: !!me && e.authorId === me.id,
-          ...(named ? { authorNick: nick[e.authorId] ?? '', good: got[e.id]?.good ?? 0, bad: got[e.id]?.bad ?? 0, matched: matched.has(e.id) } : {}),
+          authorNick: nick[e.authorId] ?? '',
+          ...(named ? { good: got[e.id]?.good ?? 0, bad: got[e.id]?.bad ?? 0, matched: matched.has(e.id) } : {}),
         })),
       })),
     });
