@@ -489,7 +489,7 @@ export function handle(req: Req, env: Env) {
       id: e.id, step: e.step, kind: e.kind, content: e.content, mine: !!me && e.authorId === me.id,
       authorNick: nick[e.authorId] ?? '', matched: matched.has(e.id),
     }));
-    return ok({ idx, word: g.words[idx] ?? '', ownerNick: list[idx]?.nick ?? '', entries: pages });
+    return ok({ idx, word: g.words[idx] ?? '', ownerNick: list[idx]?.nick ?? '', team: g.mode === 'team' ? list[idx]?.team ?? null : null, entries: pages });
   }
 
   // 스케치북 전부.
@@ -504,7 +504,7 @@ export function handle(req: Req, env: Env) {
     const matched = bookScores(g, pages).matched;
     return ok({
       books: list.map((p, idx) => ({
-        idx, word: g.words[idx] ?? '', ownerNick: p.nick,
+        idx, word: g.words[idx] ?? '', ownerNick: p.nick, team: g.mode === 'team' ? p.team : null,
         entries: pages.filter((e) => e.book === idx).map((e) => ({
           id: e.id, step: e.step, kind: e.kind, content: e.content, mine: !!me && e.authorId === me.id,
           authorNick: nick[e.authorId] ?? '', matched: matched.has(e.id),

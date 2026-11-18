@@ -149,6 +149,12 @@ header{display:flex;flex-direction:column;gap:2px}
 .lanes{display:flex;flex-direction:column;gap:18px}
 .lane{display:flex;flex-direction:column;gap:6px;min-width:0}
 .lane h3{font-family:var(--display);font-weight:400;font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+.lane h3 .teamBadge{font-family:var(--body);font-size:11px;color:inherit;border:0;margin-left:0}
+.lane h3 .teamBadge.A{color:var(--char)}
+.lane h3 .teamBadge.B{color:var(--text)}
+.lane.team{border-left:4px solid;padding-left:10px}
+.lane.team.A{border-color:var(--ember)}
+.lane.team.B{border-color:var(--text)}
 .lane h3 span{font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
 .track{list-style:none;margin:0 -16px;padding:2px 16px 8px;display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
 .track::-webkit-scrollbar{display:none}

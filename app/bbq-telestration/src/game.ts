@@ -299,7 +299,7 @@ function setupCanvas() {
 
 /* ---------- 결과: 스케치북 레인 ---------- */
 // 그림이 커서 한 번에 받으면 응답 크기 제한에 걸릴 수 있어 /book 으로 한 권씩 받는다.
-type LaneBook = { idx: number; word: string; ownerNick: string | null; entries: BookEntry[] };
+type LaneBook = { idx: number; word: string; ownerNick: string | null; team?: string | null; entries: BookEntry[] };
 let lanes: LaneBook[] | null = null, lanesFor = '', lanesLoading = false;
 
 async function loadLanes() {
@@ -329,7 +329,8 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
       const foot = e.matched ? '<div class="matched">정답! ✓</div>' : '';
       cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${who}</span>${body}${foot}</li>`);
     }
-    return `<section class="lane"><h3><span>${b.idx + 1}</span>${esc(b.word)}</h3><ol class="track">${cards.join('')}</ol></section>`;
+    const tm = b.team === 'A' || b.team === 'B' ? b.team : '';
+    return `<section class="lane${tm ? ' team ' + tm : ''}"><h3><span>${b.idx + 1}</span>${esc(b.word)}${tm ? `<span class="teamBadge ${tm}">${tm}팀</span>` : ''}</h3><ol class="track">${cards.join('')}</ol></section>`;
   }).join('');
 }
 
