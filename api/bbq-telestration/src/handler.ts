@@ -90,6 +90,11 @@ const WORDS: Record<string, string[]> = {
     // 그 밖의 말
     '오로라', '메아리', '신기루', '그림자', '카멜레온', '공작새', '고슴도치', '너구리', '미어캣', '플라밍고',
     '해파리', '오리너구리', '나무늘보', '아르마딜로', '개미핥기', '회오리', '블랙홀', '소용돌이',
+  ],  core: [ // 코어 도메인 전용 — 뷰티·앱 서비스·업무 용어
+    '여드름', '리프팅', '레이저제모', '요정귀', '중안부', '보톡스', '다크서클', '브이라인', '쌍꺼풀', '팔자주름',
+    '이중턱', '지방흡입', '라미네이트', '입술필러', '앱예약', '바비톡', '강남언니', '여신티켓', '에러', '로딩',
+    '깃허브', '버그', '핫픽스', '지라', '스프린트', '스크럼', '와이어프레임', '피그마', '슬랙', '커피',
+    '담배', '민대기', '최권열', '김수빈', '조한진', '임수현', '박효근',
   ],
 };
 const MAX_PLAYERS = 40;
@@ -128,7 +133,7 @@ const mod = (a: number, n: number) => ((a % n) + n) % n;
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 
 // matches.words 는 모집 중엔 {"tier":"easy"}(고른 난이도), 시작하면 제시어 배열이다.
-const TIERS = ['easy', 'medium', 'hard'];
+const TIERS = ['easy', 'medium', 'hard', 'core'];
 function wordsOf(v: unknown) { const x = parseJson<unknown>(v, []); return Array.isArray(x) ? (x as string[]) : []; }
 function tierOf(v: unknown) { const x = parseJson<{ tier?: string } | unknown[]>(v, []); const t = !Array.isArray(x) && x ? x.tier : undefined; return t && TIERS.includes(t) ? t : 'easy'; }
 
@@ -321,7 +326,8 @@ function pickWords(env: Env, tier: string, n: number) {
     env.db.query(`UPDATE bbq_telestration__used SET deleted_at = NOW() WHERE tier = $1 AND deleted_at IS NULL`, [tier]);
     fresh = pool.slice();
   }
-  const out = shuffle(fresh).slice(0, n);
+  let out = shuffle(fresh).slice(0, n);
+  while (out.length < n) out = out.concat(shuffle(pool).slice(0, n - out.length)); // 제시어 수가 참가자보다 적은 난이도는 되풀이해서 채운다
   out.forEach((w) => {
     const { rows } = env.db.query(`UPDATE bbq_telestration__used SET deleted_at = NULL WHERE word = $1 RETURNING word`, [w]);
     if (!rows.length) env.db.query(`INSERT INTO bbq_telestration__used (word, tier) VALUES ($1, $2)`, [w, tier]);

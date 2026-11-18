@@ -32,7 +32,7 @@ const COLORS = [
   { c: '#4c9a36', n: '초록' }, { c: '#2b6f8c', n: '파랑' }, { c: '#8a4426', n: '갈색' }, { c: '#ffffff', n: '지우개' },
 ];
 const SIZES = [4, 10, 22];
-const TIER_LABEL: Record<string, string> = { easy: '하', medium: '중', hard: '상' };
+const TIER_LABEL: Record<string, string> = { easy: '하', medium: '중', hard: '상', core: '코어전용' };
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
