@@ -179,3 +179,26 @@ header{display:flex;flex-direction:column;gap:2px}
 
 /* 자리 비움 */
 .chips li.away{opacity:.5;border-style:dashed}
+
+/* 팀 뱃지 (로비 chips) */
+.teamBadge{font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;vertical-align:middle}
+.teamBadge.A{background:var(--ember);color:var(--char)}
+.teamBadge.B{background:var(--text);color:var(--bg)}
+
+/* 팀 배정 패널 */
+.teamAssign{display:flex;flex-direction:column;gap:4px;padding:8px 0}
+.teamCount{font-size:12px;color:var(--muted);margin-bottom:4px}
+.teamAssignRow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.teamAssignRow .nick{flex:1;font-size:14px}
+.teamBtn{all:unset;cursor:pointer;padding:4px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:700;line-height:1}
+.teamBtn.A.on{background:var(--ember);border-color:var(--ember);color:var(--char)}
+.teamBtn.B.on{background:var(--text);border-color:var(--text);color:var(--bg)}
+.teamBtn:focus-visible{outline:2px solid var(--flame);outline-offset:2px}
+
+/* 팀전 결과 점수 */
+.teamScoreWrap{display:flex;align-items:center;justify-content:center;gap:12px;padding:4px 0}
+.teamBox{font-family:var(--display);font-weight:400;font-size:22px;line-height:1.2;padding:12px 20px;border-radius:14px;text-align:center;min-width:80px}
+.teamBox.A{background:var(--ember);color:var(--char)}
+.teamBox.B{background:var(--text);color:var(--bg)}
+.teamPt{font-family:var(--mono);font-size:15px;display:block}
+.teamVs{font-size:13px;color:var(--muted)}

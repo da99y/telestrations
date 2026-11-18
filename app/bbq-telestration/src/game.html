@@ -10,6 +10,11 @@
     <span class="eyebrow" id="hTitle">진행자 메뉴</span>
     <span class="stat" id="hStat"></span>
     <div class="row" id="hSettings">
+      <div class="seg" role="radiogroup" aria-label="게임 모드">
+        <span class="segLabel">모드</span>
+        <label for="modeInd"><input type="radio" name="mode" id="modeInd" value="individual" checked>개인전</label>
+        <label for="modeTeam"><input type="radio" name="mode" id="modeTeam" value="team">팀전</label>
+      </div>
       <div class="seg" role="radiogroup" aria-label="난이도">
         <span class="segLabel">난이도</span>
         <label for="tierEasy"><input type="radio" name="tier" id="tierEasy" value="easy" checked>하</label>
@@ -26,6 +31,10 @@
       <label class="field" for="gSec">추측 초<input id="gSec" type="number" min="10" max="90" value="20" inputmode="numeric"></label>
     </div>
     <button class="btn" id="hNew" type="button">새 판 열기</button>
+    <div class="teamAssign" id="hTeam" hidden>
+      <p class="sub" style="margin:0 0 8px">참가자를 팀에 배정하세요. 모두 배정되어야 시작할 수 있어요.</p>
+      <div id="hTeamList"></div>
+    </div>
     <div class="bots" id="hBots" hidden>
       <div class="row">
         <label class="field" for="botCount">연습용 가상 참가자<input id="botCount" type="number" min="1" max="20" value="5" inputmode="numeric"></label>
@@ -123,6 +132,7 @@
 
   <!-- RESULT -->
   <section class="screen" id="result" hidden>
+    <div class="panel" id="rTeamScore" hidden></div>
     <div class="panel" id="rBooks">
       <h2>이번 판 스케치북</h2>
       <div class="lanes" id="rLanes"></div>

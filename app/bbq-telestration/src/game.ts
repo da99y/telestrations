@@ -6,13 +6,14 @@ import { botDrawing, botGuess, rememberBotDrawing } from './bots';
 
 type Game = {
   id: number; status: string; steps: number; dSec: number; gSec: number; tier?: string;
-  curStep: number; stepStart: number | null; books: number;
+  curStep: number; stepStart: number | null; books: number; mode: string;
 };
-type Player = { away?: boolean; id: number; nick: string; seat: number | null; joinedAt: number };
-type Result = { id: number; nick: string; guess: number; draw: number; book: number; score: number };
+type Player = { away?: boolean; id: number; nick: string; seat: number | null; joinedAt: number; team?: string | null };
+type Result = { id: number; nick: string; team?: string | null; guess: number; draw: number; book: number; score: number };
+type TeamResult = { team: string; score: number; members: Result[] };
 type State = {
   now: number; game: Game | null; players: Player[]; meId: number | null; host: boolean; hostClaimable: boolean; canOpen?: boolean;
-  submitted?: number; results?: Result[];
+  submitted?: number; results?: Result[]; teamResults?: TeamResult[];
 };
 type Phase =
   | { kind: 'none' | 'lobby' | 'done' }
@@ -136,7 +137,11 @@ function renderLobby(ph: Phase) {
   $('#join').textContent = renaming ? '바꾸기' : '참가하기';
   if (me) $('#joinedTitle').textContent = ph.kind === 'starting' ? `${Math.ceil(ph.left)}초 뒤 시작! 펜 준비하세요` : `${me.nick} 님, 참가 완료!`;
   $('#cnt').textContent = list.length ? list.length + '명' : '';
-  $('#chips').innerHTML = list.length ? list.map((p) => `<li class="${p.id === st!.meId ? 'me' : ''}${p.away ? ' away' : ''}">${esc(p.nick)}${p.away ? ' · 자리 비움' : ''}</li>`).join('') : '<li>아직 아무도 없어요</li>';
+  const isTeamMode = st?.game?.mode === 'team';
+  $('#chips').innerHTML = list.length ? list.map((p) => {
+    const badge = isTeamMode && p.team ? ` <span class="teamBadge ${p.team}">${p.team}팀</span>` : '';
+    return `<li class="${p.id === st!.meId ? 'me' : ''}${p.away ? ' away' : ''}">${esc(p.nick)}${badge}${p.away ? ' · 자리 비움' : ''}</li>`;
+  }).join('') : '<li>아직 아무도 없어요</li>';
   show('lobby');
 }
 
@@ -331,6 +336,16 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
 /* ---------- result ---------- */
 function renderResult() {
   show('result');
+  // 팀전 결과 점수 박스
+  const tr = st?.teamResults;
+  const rts = $('#rTeamScore');
+  if (tr && tr.length >= 2) {
+    const sorted = tr.slice().sort((a, b) => b.score - a.score);
+    rts.hidden = false;
+    rts.innerHTML = `<div class="teamScoreWrap">${sorted.map((t) => `<div class="teamBox ${t.team}">${t.team}팀<br><span class="teamPt">${t.score}점</span></div>`).join('<span class="teamVs">vs</span>')}</div>`;
+  } else {
+    rts.hidden = true;
+  }
   void (async () => {
     if (await loadLanes() && $('#rLanes').dataset.for !== lanesFor) { $('#rLanes').innerHTML = lanesHTML(lanes!); $('#rLanes').dataset.for = lanesFor; }
   })();
@@ -355,13 +370,22 @@ function renderHost(ph: Phase) {
   $('#hTitle').classList.toggle('htitle', idle);
   $('#hStat').hidden = idle;
   $('#hSettings').hidden = !idle; $('#hNew').hidden = !idle;
+  // 팀 배정 패널: 팀전 + 로비 단계에서만 표시
+  const isTeam = st!.game?.mode === 'team' || (!st!.game && $<HTMLInputElement>('#modeTeam').checked);
+  $('#hTeam').hidden = !isTeam || ph.kind !== 'lobby';
+  if (isTeam && ph.kind === 'lobby') renderTeamAssign();
   $('#hBots').hidden = ph.kind !== 'lobby';
   const main = $<HTMLButtonElement>('#hMain');
   main.hidden = ph.kind !== 'lobby';
-  main.disabled = ph.kind === 'lobby' && n < 2;
+  const teamUnassigned = ph.kind === 'lobby' && st!.game?.mode === 'team'
+    ? (st!.players ?? []).filter((p) => !p.away && p.team !== 'A' && p.team !== 'B').length
+    : 0;
+  main.disabled = ph.kind === 'lobby' && (n < 2 || teamUnassigned > 0);
   main.className = 'btn hot';
   const hostOut = ph.kind === 'lobby' && !meOf();
-  main.textContent = n < 2 ? '2명 이상 모이면 시작할 수 있어요' : hostOut ? (confirmAction === 'start' ? '진행자는 빼고 시작할까요? 한 번 더 누르기' : '시작! (진행자도 하려면 먼저 아래에서 참가)') : '시작!';
+  main.textContent = n < 2 ? '2명 이상 모이면 시작할 수 있어요'
+    : teamUnassigned > 0 ? `팀 미배정 ${teamUnassigned}명 → 모두 배정해야 시작해요`
+    : hostOut ? (confirmAction === 'start' ? '진행자는 빼고 시작할까요? 한 번 더 누르기' : '시작! (진행자도 하려면 먼저 아래에서 참가)') : '시작!';
   const cancel = $('#hCancel');
   cancel.hidden = idle;
   cancel.textContent = confirmAction === 'cancel' ? '정말 이 판을 취소할까요? 한 번 더 누르기' : '이 판 취소하기';
@@ -371,6 +395,18 @@ function renderHost(ph: Phase) {
   const hb = $('#hbCancel');
   hb.textContent = confirmAction === 'cancel' ? '정말 중단할까요? 한 번 더 누르기' : '게임 중단하기';
   hb.className = 'btn small' + (confirmAction === 'cancel' ? ' warn' : ' ghost');
+}
+
+function renderTeamAssign() {
+  const players = (st?.players ?? []).filter((p) => !p.away).sort((a, b) => a.joinedAt - b.joinedAt);
+  const aCount = players.filter((p) => p.team === 'A').length;
+  const bCount = players.filter((p) => p.team === 'B').length;
+  $('#hTeamList').innerHTML = `<div class="teamCount">A팀 ${aCount}명 / B팀 ${bCount}명</div>`
+    + players.map((p) => `<div class="teamAssignRow" data-id="${p.id}">
+      <span class="nick">${esc(p.nick)}</span>
+      <button class="teamBtn A${p.team === 'A' ? ' on' : ''}" data-team="A" data-sid="${p.id}">A팀</button>
+      <button class="teamBtn B${p.team === 'B' ? ' on' : ''}" data-team="B" data-sid="${p.id}">B팀</button>
+    </div>`).join('');
 }
 
 async function hostCall(path: string, data: Record<string, unknown> = {}) {
@@ -394,7 +430,7 @@ const phaseName = () => phase().kind;
 const awayCount = () => (st?.players ?? []).filter((p) => p.away).length;
 
 /* ---------- 지난 게임 결과 ---------- */
-type Hist = { no: number; id: number; at: number | null; count: number; board: { nick: string; label: string }[] };
+type Hist = { no: number; id: number; at: number | null; count: number; board: { nick: string; label: string }[]; mode?: string };
 let hist: Hist[] = [], histFor = '', histOpen = -1;
 async function loadHistory() {
   const key = `${st?.game?.id ?? ''}:${st?.game?.status ?? ''}:${phaseName()}`;
@@ -530,8 +566,20 @@ function bind() {
     b.disabled = false;
   });
   const newGame = () => hostCall('new', {
+    mode: document.querySelector<HTMLInputElement>('input[name=mode]:checked')?.value ?? 'individual',
     tier: document.querySelector<HTMLInputElement>('input[name=tier]:checked')?.value ?? 'easy',
     steps: $<HTMLInputElement>('#stepsManual').checked ? num('#steps', 2, 99, 4) + 1 : 0 /* 0 = 사람 수만큼, +1 은 제시어 칸 */, dSec: num('#dSec', 20, 180, 40), gSec: num('#gSec', 10, 90, 20),
+  });
+  // 팀 배정 버튼 클릭
+  $('#hTeamList').addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('.teamBtn'); if (!btn) return;
+    const seatId = Number(btn.dataset.sid), team = btn.dataset.team;
+    if (!seatId || !team) return;
+    await hostCall('team', { seatId, team });
+  });
+  // 모드 radio 변경 시 팀 배정 패널 토글
+  document.querySelectorAll<HTMLInputElement>('input[name=mode]').forEach((r) => {
+    r.addEventListener('change', () => { if (st) renderHost(phase()); });
   });
   $('#hNew').addEventListener('click', () => void newGame());
   $('#hMain').addEventListener('click', () => {

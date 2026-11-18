@@ -14,9 +14,9 @@ type Req = { method: string; path: string; query: Record<string, string | string
 type Env = { db: { query: (sql: string, params?: unknown[]) => { rows: Record<string, unknown>[] } }; log: (...args: unknown[]) => void };
 type Game = {
   id: number; status: string; steps: number; dSec: number; gSec: number; voteSec: number; penalty: number;
-  words: string[]; tier: string; curStep: number; stepStart: number | null; voteEnd: number | null;
+  words: string[]; tier: string; curStep: number; stepStart: number | null; voteEnd: number | null; mode: string;
 };
-type Player = { id: number; key: string; nick: string; joinedAt: number; seat: number | null };
+type Player = { id: number; key: string; nick: string; joinedAt: number; seat: number | null; team: string | null };
 type Phase =
   | { kind: 'none' | 'lobby' | 'done' }
   | { kind: 'wait'; k: number; startsAt: number }
@@ -134,7 +134,7 @@ function tierOf(v: unknown) { const x = parseJson<{ tier?: string } | unknown[]>
 
 function currentGame(env: Env): Game | null {
   const { rows } = env.db.query(
-    `SELECT id, status, steps, d_sec, g_sec, vote_sec, penalty, words, cur_step, step_start, vote_end FROM bbq_telestration__matches ORDER BY id DESC LIMIT 1`,
+    `SELECT id, status, steps, d_sec, g_sec, vote_sec, penalty, words, cur_step, step_start, vote_end, mode FROM bbq_telestration__matches ORDER BY id DESC LIMIT 1`,
     [],
   );
   const r = rows[0];
@@ -142,18 +142,18 @@ function currentGame(env: Env): Game | null {
   return {
     id: Number(r.id), status: String(r.status), steps: Number(r.steps), dSec: Number(r.d_sec), gSec: Number(r.g_sec),
     voteSec: Number(r.vote_sec), penalty: Number(r.penalty), words: wordsOf(r.words), tier: tierOf(r.words),
-    curStep: Number(r.cur_step ?? 0), stepStart: numOrNull(r.step_start), voteEnd: numOrNull(r.vote_end),
+    curStep: Number(r.cur_step ?? 0), stepStart: numOrNull(r.step_start), voteEnd: numOrNull(r.vote_end), mode: String(r.mode ?? 'individual'),
   };
 }
 function recentGames(env: Env, n: number): Game[] {
   const { rows } = env.db.query(
-    `SELECT id, status, steps, d_sec, g_sec, vote_sec, penalty, words, cur_step, step_start, vote_end FROM bbq_telestration__matches ORDER BY id DESC LIMIT ${n}`,
+    `SELECT id, status, steps, d_sec, g_sec, vote_sec, penalty, words, cur_step, step_start, vote_end, mode FROM bbq_telestration__matches ORDER BY id DESC LIMIT ${n}`,
     [],
   );
   return rows.map((r) => ({
     id: Number(r.id), status: String(r.status), steps: Number(r.steps), dSec: Number(r.d_sec), gSec: Number(r.g_sec),
     voteSec: Number(r.vote_sec), penalty: Number(r.penalty), words: wordsOf(r.words), tier: tierOf(r.words),
-    curStep: Number(r.cur_step ?? 0), stepStart: numOrNull(r.step_start), voteEnd: numOrNull(r.vote_end),
+    curStep: Number(r.cur_step ?? 0), stepStart: numOrNull(r.step_start), voteEnd: numOrNull(r.vote_end), mode: String(r.mode ?? 'individual'),
   }));
 }
 
@@ -170,10 +170,10 @@ function phaseOf(g: Game | null, now: number): Phase {
 
 function playersOf(env: Env, gameId: number): Player[] {
   const { rows } = env.db.query(
-    `SELECT id, player_key, nick, joined_at, seat FROM bbq_telestration__seats WHERE game_id = $1 AND deleted_at IS NULL ORDER BY id ASC LIMIT ${MAX_PLAYERS}`,
+    `SELECT id, player_key, nick, joined_at, seat, team FROM bbq_telestration__seats WHERE game_id = $1 AND deleted_at IS NULL ORDER BY id ASC LIMIT ${MAX_PLAYERS}`,
     [gameId],
   );
-  return rows.map((r) => ({ id: Number(r.id), key: String(r.player_key), nick: String(r.nick), joinedAt: Number(r.joined_at), seat: numOrNull(r.seat) }));
+  return rows.map((r) => ({ id: Number(r.id), key: String(r.player_key), nick: String(r.nick), joinedAt: Number(r.joined_at), seat: numOrNull(r.seat), team: r.team != null ? String(r.team) : null }));
 }
 const seated = (list: Player[]) => list.filter((p) => p.seat != null).sort((a, b) => a.seat! - b.seat!);
 function submittedCount(env: Env, gameId: number, step: number) {
@@ -268,9 +268,19 @@ function results(env: Env, g: Game, list: Player[]) {
   return seated(list)
     .map((p) => {
       const x = pts[p.id] ?? { guess: 0, draw: 0, book: 0 };
-      return { id: p.id, nick: p.nick, guess: x.guess, draw: x.draw, book: x.book, score: x.guess + x.draw + x.book };
+      return { id: p.id, nick: p.nick, team: p.team, guess: x.guess, draw: x.draw, book: x.book, score: x.guess + x.draw + x.book };
     })
     .sort((a, b) => b.score - a.score || hash(g.id + ':' + a.id) - hash(g.id + ':' + b.id));
+}
+function teamResults(res: ReturnType<typeof results>) {
+  const groups: Record<string, { score: number; members: typeof res }> = {};
+  for (const r of res) {
+    const t = r.team ?? 'none';
+    if (!groups[t]) groups[t] = { score: 0, members: [] };
+    groups[t].score += r.score;
+    groups[t].members.push(r);
+  }
+  return Object.entries(groups).map(([team, v]) => ({ team, score: v.score, members: v.members }));
 }
 
 // 지난 판 요약(결과 화면과 같은 계산 — 점수 순).
@@ -278,9 +288,16 @@ function summaryOf(env: Env, g: Game, now: number): Summary | null {
   if (phaseOf(g, now).kind !== 'done') return null;
   const res = results(env, g, playersOf(env, g.id));
   if (!res.length) return null;
-  return { id: g.id, at: g.stepStart, count: res.length, board: res.map((r) => ({ nick: r.nick, label: `${r.score}점` })) };
+  let board: { nick: string; label: string }[];
+  if (g.mode === 'team') {
+    const tr = teamResults(res);
+    board = tr.map((t) => ({ nick: `${t.team}팀`, label: `${t.score}점` }));
+  } else {
+    board = res.map((r) => ({ nick: r.nick, label: `${r.score}점` }));
+  }
+  return { id: g.id, at: g.stepStart, count: res.length, board, mode: g.mode };
 }
-type Summary = { id: number; at: number | null; count: number; board: { nick: string; label: string }[] };
+type Summary = { id: number; at: number | null; count: number; board: { nick: string; label: string }[]; mode: string };
 
 // 화면을 보고 있는지: /state 를 부를 때마다 seen_at 을 갱신하고, AWAY_MS 동안 없으면 자리 비움.
 // 앱은 화면이 가려지면 폴링을 멈춘다. 가상 참가자(bot- 키)는 진행자 화면이 대신 움직이니 항상 있는 걸로 친다.
@@ -312,7 +329,13 @@ function pickWords(env: Env, tier: string, n: number) {
   return out;
 }
 
+let dbMigrated = false;
 export function handle(req: Req, env: Env) {
+  if (!dbMigrated) {
+    dbMigrated = true;
+    env.db.query(`ALTER TABLE bbq_telestration__matches ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'individual'`);
+    env.db.query(`ALTER TABLE bbq_telestration__seats ADD COLUMN IF NOT EXISTS team TEXT`);
+  }
   const body = (req.body ?? {}) as Record<string, unknown>;
   const now = Date.now();
 
@@ -331,12 +354,16 @@ export function handle(req: Req, env: Env) {
       now, host, hostClaimable, canOpen, meId: me ? me.id : null,
       game: {
         id: g.id, status: g.status, steps: g.steps, dSec: g.dSec, gSec: g.gSec, voteSec: g.voteSec, penalty: g.penalty, tier: g.tier,
-        curStep: g.curStep, stepStart: g.stepStart, voteEnd: g.voteEnd, books: g.status === 'lobby' ? 0 : seated(list).length,
+        curStep: g.curStep, stepStart: g.stepStart, voteEnd: g.voteEnd, books: g.status === 'lobby' ? 0 : seated(list).length, mode: g.mode,
       },
-      players: list.map((p) => ({ id: p.id, nick: p.nick, seat: p.seat, joinedAt: p.joinedAt, away: away.has(p.id) })),
+      players: list.map((p) => ({ id: p.id, nick: p.nick, seat: p.seat, joinedAt: p.joinedAt, away: away.has(p.id), team: p.team })),
     };
     if (ph.kind === 'step' || ph.kind === 'wait') out.submitted = submittedCount(env, g.id, g.curStep);
-    if (ph.kind === 'done') out.results = results(env, g, list);
+    if (ph.kind === 'done') {
+      const res = results(env, g, list);
+      out.results = res;
+      if (g.mode === 'team') out.teamResults = teamResults(res);
+    }
     return ok(out);
   }
 
@@ -366,7 +393,18 @@ export function handle(req: Req, env: Env) {
     if (!g || (ph.kind !== 'step' && ph.kind !== 'wait')) return bad('지금은 채울 칸이 없어요.', 409);
     const list = seated(playersOf(env, g.id)), me = list.find((p) => p.key === key);
     if (!me) return bad('이번 판 참가자가 아니에요.', 403);
-    const n = list.length, k = g.curStep, book = mod(me.seat! - (k - 1), n);
+    const n = list.length, k = g.curStep;
+    let book: number;
+    if (g.mode === 'team') {
+      const aList = list.filter((p) => p.team === 'A'), bList = list.filter((p) => p.team === 'B');
+      const isA = me.team === 'A';
+      const teamOffset = isA ? 0 : aList.length;
+      const teamSize = isA ? aList.length : bList.length;
+      const myTeamSeat = me.seat! - teamOffset;
+      book = teamOffset + mod(myTeamSeat - (k - 1), teamSize);
+    } else {
+      book = mod(me.seat! - (k - 1), n);
+    }
     const pages = pagesOf(env, g.id, book, true);
     const mine = pages.find((e) => e.step === k);
     const kind = kindOf(k);
@@ -388,7 +426,18 @@ export function handle(req: Req, env: Env) {
     }
     const list = seated(playersOf(env, g.id)), me = list.find((p) => p.key === key);
     if (!me) return bad('이번 판 참가자가 아니에요.', 403);
-    const k = g.curStep, kind = kindOf(k), book = mod(me.seat! - (k - 1), list.length);
+    const k = g.curStep, kind = kindOf(k);
+    let book: number;
+    if (g.mode === 'team') {
+      const aList = list.filter((p) => p.team === 'A'), bList = list.filter((p) => p.team === 'B');
+      const isA = me.team === 'A';
+      const teamOffset = isA ? 0 : aList.length;
+      const teamSize = isA ? aList.length : bList.length;
+      const myTeamSeat = me.seat! - teamOffset;
+      book = teamOffset + mod(myTeamSeat - (k - 1), teamSize);
+    } else {
+      book = mod(me.seat! - (k - 1), list.length);
+    }
     let content = typeof body.content === 'string' ? body.content : '';
     if (kind === 'draw') {
       if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(content) || content.length > MAX_DRAWING) return bad('그림을 저장하지 못했어요.');
@@ -492,9 +541,10 @@ export function handle(req: Req, env: Env) {
     if (req.path === '/host/new') {
       if (!hostKey) return bad('잘못된 요청이에요.');
       if (g && ph.kind !== 'none' && ph.kind !== 'done') return bad('진행 중인 판이 있어요. 먼저 끝내 주세요.', 409);
+      const gameMode = body.mode === 'team' ? 'team' : 'individual';
       const { rows: made } = env.db.query(
-        `INSERT INTO bbq_telestration__matches (status, steps, d_sec, g_sec, vote_sec, penalty, words, cur_step) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-        ['lobby', readInt(body.steps, 0, 100, 0), readInt(body.dSec, 20, 180, 40), readInt(body.gSec, 10, 90, 20), readInt(body.voteSec, 30, 600, 180), readInt(body.penalty, 1, 10, 3), JSON.stringify({ tier: TIERS.includes(String(body.tier)) ? String(body.tier) : 'easy' }), 0],
+        `INSERT INTO bbq_telestration__matches (status, steps, d_sec, g_sec, vote_sec, penalty, words, cur_step, mode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        ['lobby', readInt(body.steps, 0, 100, 0), readInt(body.dSec, 20, 180, 40), readInt(body.gSec, 10, 90, 20), readInt(body.voteSec, 30, 600, 180), readInt(body.penalty, 1, 10, 3), JSON.stringify({ tier: TIERS.includes(String(body.tier)) ? String(body.tier) : 'easy' }), 0, gameMode],
       );
       env.db.query(`INSERT INTO bbq_telestration__openers (game_id, owner_key) VALUES ($1, $2)`, [Number(made[0].id), hostKey]);
       return ok({});
@@ -507,15 +557,39 @@ export function handle(req: Req, env: Env) {
       // 시작하는 순간 화면을 보고 있는 사람만 자리를 받는다(나머지는 이번 판 구경).
       const everyone = playersOf(env, g.id), awayIds = awaySet(env, g.id, everyone, now), list = everyone.filter((p) => !awayIds.has(p.id));
       if (list.length < 2) return bad('화면을 보고 있는 사람이 2명 이상이어야 시작할 수 있어요.', 409);
-      // 자리는 무작위로 섞어서 정한다(옆자리 친한 사람끼리 이어지지 않게).
-      shuffle(list).forEach((p, i) => env.db.query(`UPDATE bbq_telestration__seats SET seat = $1 WHERE id = $2`, [i, p.id]));
-      const words = pickWords(env, g.tier, list.length);
-      // 칸 수 0 = 자동: 스케치북이 모든 사람을 한 바퀴 돈다. 직접 정해도 참가 인원을 넘지 않는다. +1 은 제시어 칸.
-      const steps = Math.min(g.steps || Infinity, list.length + 1);
-      env.db.query(
-        `UPDATE bbq_telestration__matches SET status = $1, cur_step = $2, step_start = $3, words = $4, steps = $5 WHERE id = $6`,
-        ['running', 1, now + START_DELAY_MS, JSON.stringify(words), steps, g.id],
-      );
+      if (g.mode === 'team') {
+        const unassigned = list.filter((p) => p.team !== 'A' && p.team !== 'B');
+        if (unassigned.length) return bad(`팀 미배정 참가자가 ${unassigned.length}명 있어요. 모두 팀에 배정해 주세요.`, 409);
+        // 팀전: A팀 먼저(joinedAt순), 그다음 B팀(joinedAt순) → seat 0,1,...
+        const aTeam = list.filter((p) => p.team === 'A').sort((a, b) => a.joinedAt - b.joinedAt);
+        const bTeam = list.filter((p) => p.team === 'B').sort((a, b) => a.joinedAt - b.joinedAt);
+        [...aTeam, ...bTeam].forEach((p, i) => env.db.query(`UPDATE bbq_telestration__seats SET seat = $1 WHERE id = $2`, [i, p.id]));
+        const totalBooks = aTeam.length + bTeam.length;
+        const words = pickWords(env, g.tier, totalBooks);
+        const teamSteps = Math.max(aTeam.length, bTeam.length);
+        const steps = Math.min(g.steps || Infinity, teamSteps + 1); // +1은 제시어 칸
+        env.db.query(
+          `UPDATE bbq_telestration__matches SET status = $1, cur_step = $2, step_start = $3, words = $4, steps = $5 WHERE id = $6`,
+          ['running', 1, now + START_DELAY_MS, JSON.stringify(words), steps, g.id],
+        );
+      } else {
+        // 개인전: 자리는 무작위로 섞어서 정한다(옆자리 친한 사람끼리 이어지지 않게).
+        shuffle(list).forEach((p, i) => env.db.query(`UPDATE bbq_telestration__seats SET seat = $1 WHERE id = $2`, [i, p.id]));
+        const words = pickWords(env, g.tier, list.length);
+        // 칸 수 0 = 자동: 스케치북이 모든 사람을 한 바퀴 돈다. 직접 정해도 참가 인원을 넘지 않는다. +1 은 제시어 칸.
+        const steps = Math.min(g.steps || Infinity, list.length + 1);
+        env.db.query(
+          `UPDATE bbq_telestration__matches SET status = $1, cur_step = $2, step_start = $3, words = $4, steps = $5 WHERE id = $6`,
+          ['running', 1, now + START_DELAY_MS, JSON.stringify(words), steps, g.id],
+        );
+      }
+      return ok({});
+    }
+    if (req.path === '/host/team') {
+      if (ph.kind !== 'lobby') return bad('로비에서만 팀을 배정할 수 있어요.', 409);
+      const seatId = readInt(body.seatId, 0, 1e9, 0);
+      const team = body.team === 'A' ? 'A' : body.team === 'B' ? 'B' : null;
+      env.db.query(`UPDATE bbq_telestration__seats SET team = $1 WHERE id = $2 AND game_id = $3`, [team, seatId, g.id]);
       return ok({});
     }
     if (req.path === '/host/cancel') {

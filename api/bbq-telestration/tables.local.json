@@ -58,6 +58,12 @@
           "type": "bigint"
         },
         {
+          "name": "mode",
+          "type": "text",
+          "notNull": true,
+          "default": "'individual'"
+        },
+        {
           "name": "created_at",
           "type": "timestamptz",
           "default": "NOW()"
@@ -95,6 +101,10 @@
         {
           "name": "seat",
           "type": "integer"
+        },
+        {
+          "name": "team",
+          "type": "text"
         },
         {
           "name": "deleted_at",
