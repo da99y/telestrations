@@ -1,0 +1,12 @@
+{
+  "name": "telestrations",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix app/bbq-telestration install && npm --prefix app/bbq-telestration run build:standalone && npm --prefix api/bbq-telestration install",
+    "start": "node api/bbq-telestration/dev-server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

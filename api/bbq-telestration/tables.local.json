@@ -1,0 +1,313 @@
+{
+  "//": "dev-server.mjs 가 시작 시 idempotent 하게 생성하는 로컬 테이블 스키마. 베타에는 MCP create_table 로 같은 정의를 만든다(베타는 deleted_at 을 자동으로 붙인다). 2026-10-14 개편으로 matches/seats/pages/marks 를 쓰고, 이전 games/players/entries/votes 는 더 안 쓴다.",
+  "tables": [
+    {
+      "table": "matches",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "steps",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "d_sec",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "g_sec",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "vote_sec",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "penalty",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "words",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "cur_step",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "step_start",
+          "type": "bigint"
+        },
+        {
+          "name": "vote_end",
+          "type": "bigint"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        }
+      ]
+    },
+    {
+      "table": "seats",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "game_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "player_key",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "nick",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "joined_at",
+          "type": "bigint",
+          "notNull": true
+        },
+        {
+          "name": "seat",
+          "type": "integer"
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "table": "pages",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "game_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "book",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "step",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "author_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        }
+      ]
+    },
+    {
+      "table": "marks",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "game_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "voter_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "page_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "table": "hosts",
+      "columns": [
+        {
+          "name": "owner_key",
+          "type": "text",
+          "primaryKey": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        }
+      ]
+    },
+    {
+      "table": "openers",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "game_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "owner_key",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        }
+      ]
+    },
+    {
+      "table": "marks2",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "game_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "voter_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "page_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "table": "presence",
+      "columns": [
+        {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true
+        },
+        {
+          "name": "game_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "seat_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "seen_at",
+          "type": "bigint",
+          "notNull": true
+        }
+      ]
+    },
+    {
+      "table": "used",
+      "columns": [
+        {
+          "name": "word",
+          "type": "text",
+          "primaryKey": true
+        },
+        {
+          "name": "tier",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "NOW()"
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamptz"
+        }
+      ]
+    }
+  ]
+}

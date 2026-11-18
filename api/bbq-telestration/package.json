@@ -1,0 +1,20 @@
+{
+  "name": "@mockingbird/api-bbq-telestration",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "bundle:handler": "node esbuild.handler.mjs",
+    "test:handler": "node wasm-local-test.mjs",
+    "dev:server": "node dev-server.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "esbuild": "^0.24.2",
+    "quickjs-emscripten": "^0.32.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  }
+}

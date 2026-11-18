@@ -1,0 +1,161 @@
+<div class="app">
+  <header>
+    <a class="back" href="/app/bbq-telestration/" onclick="event.preventDefault();location.reload()">← 게임 메뉴</a>
+    <span class="eyebrow">ORDER GROWTH · MINI GAMES</span>
+    <h1>그림 그리고 <em>맞추기</em></h1>
+  </header>
+
+  <!-- HOST CONTROLS (진행자 브라우저에서만 보임) -->
+  <section class="panel host" id="host" hidden>
+    <span class="eyebrow" id="hTitle">진행자 메뉴</span>
+    <span class="stat" id="hStat"></span>
+    <div class="row" id="hSettings">
+      <div class="seg" role="radiogroup" aria-label="난이도">
+        <span class="segLabel">난이도</span>
+        <label for="tierEasy"><input type="radio" name="tier" id="tierEasy" value="easy" checked>하</label>
+        <label for="tierMedium"><input type="radio" name="tier" id="tierMedium" value="medium">중</label>
+        <label for="tierHard"><input type="radio" name="tier" id="tierHard" value="hard">상</label>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="칸 수">
+        <span class="segLabel">칸 수</span>
+        <label for="stepsAuto"><input type="radio" name="stepsMode" id="stepsAuto" value="auto" checked>사람 수만큼</label>
+        <label for="stepsManual"><input type="radio" name="stepsMode" id="stepsManual" value="manual">직접 설정</label>
+        <input id="steps" type="number" min="2" max="99" value="4" inputmode="numeric" aria-label="그리기·맞추기 칸 수" hidden>
+      </div>
+      <label class="field" for="dSec">그리기 초<input id="dSec" type="number" min="20" max="180" value="40" inputmode="numeric"></label>
+      <label class="field" for="gSec">추측 초<input id="gSec" type="number" min="10" max="90" value="20" inputmode="numeric"></label>
+      <label class="field" for="voteSec">투표 초<input id="voteSec" type="number" min="30" max="600" value="180" inputmode="numeric"></label>
+      <label class="field" for="penalty">뽑을 인원<input id="penalty" type="number" min="1" max="10" value="3" inputmode="numeric"></label>
+    </div>
+    <button class="btn" id="hNew" type="button">새 판 열기</button>
+    <div class="bots" id="hBots" hidden>
+      <div class="row">
+        <label class="field" for="botCount">연습용 가상 참가자<input id="botCount" type="number" min="1" max="20" value="5" inputmode="numeric"></label>
+        <button class="btn small" id="addBots" type="button">추가하기</button>
+      </div>
+    </div>
+    <button class="btn" id="hMain" type="button"></button>
+    <button class="btn small ghost" id="hCancel" type="button" hidden>이 판 취소하기</button>
+    <p class="err" id="hErr" hidden></p>
+  </section>
+
+  <div class="claim" id="claimBox" hidden>
+    <span class="hint">이 게임을 진행할 사람이 아직 없어요.</span>
+    <button class="btn small" id="claimHost" type="button">내가 진행자 하기</button>
+  </div>
+
+  <!-- LOADING / NOTICE -->
+  <section class="screen" id="notice">
+    <div class="panel">
+      <h2 id="nTitle">연결하는 중이에요</h2>
+      <p class="sub" id="nBody">잠시만 기다려 주세요.</p>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section class="screen" id="lobby" hidden>
+    <div class="panel" id="joinPanel">
+      <h2 id="joinTitle">별명으로 참가하기</h2>
+      <label class="field" for="nick">별명<input id="nick" type="text" maxlength="10" placeholder="예: 집게담당" autocomplete="off"></label>
+      <button class="btn hot" id="join" type="button">참가하기</button>
+      <p class="err" id="joinErr" hidden></p>
+    </div>
+    <div class="panel" id="joinedPanel" hidden>
+      <h2><span class="pulse"></span><span id="joinedTitle">참가 완료!</span></h2>
+      <p class="sub" id="joinedSub">진행자가 시작하면 이 화면이 바로 바뀌어요.</p>
+      <button class="btn small" id="rename" type="button">별명 바꾸기</button>
+    </div>
+    <div class="panel" id="waitGame" hidden>
+      <h2 id="waitTitle">아직 열린 판이 없어요</h2>
+      <p class="sub" id="waitSub">진행자가 새 판을 열면 여기서 바로 참가할 수 있어요.</p>
+    </div>
+    <div class="panel">
+      <h2>참가자 <span class="count" id="cnt"></span></h2>
+      <ul class="chips" id="chips"></ul>
+    </div>
+    <div class="panel">
+      <h2>규칙</h2>
+      <ol class="rules">
+        <li>시작하면 각자 <b>제시어</b>를 받고 그림으로 그려요. 제시어는 진행자가 고른 난이도(하·중·상)로 나와요.</li>
+        <li>스케치북은 다음 사람에게 넘어가요. 앞사람 <b>그림을 보고 뭔지 추측</b>해 적고, 그다음 사람은 그 <b>추측을 다시 그려요</b>.</li>
+        <li>시간이 끝나면 지금까지 한 게 <b>자동으로 제출</b>돼요. 모두 내면 바로 다음 칸으로 넘어가요.</li>
+        <li>다 돌면 모든 스케치북이 각자 폰에 한꺼번에 열려요. 옆으로 넘겨 보며 칸마다 <b>👑 띵작</b>이나 <b>💩 망작</b>을 줘요(개수 제한 없음, 내 칸 제외). 누가 그렸는지는 결과 발표 때 공개돼요.</li>
+        <li><b>점수</b>: 앞사람 그림을 보고 원래 말을 맞히면 맞힌 사람 +1, 그린 사람도 +1. 마지막 답이 처음 제시어와 같으면 스케치북 주인 +1. 띵작 표 하나에 +1, 망작 표 하나에 −1.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- DRAW -->
+  <section class="screen" id="draw" hidden>
+    <div class="qhead"><span id="dStep"></span><span class="left" id="dLeft"></span></div>
+    <div class="timer"><i id="dBar"></i></div>
+    <div class="prompt" id="dPrompt"></div>
+    <div class="canvasWrap"><canvas id="cv" width="480" height="480" aria-label="그림판"></canvas></div>
+    <div class="tools">
+      <div class="colors" id="colors"></div>
+      <div class="sizes" id="sizes"></div>
+    </div>
+    <div class="row tight">
+      <button class="btn small" id="undo" type="button">되돌리기</button>
+      <button class="btn small" id="clear" type="button">전부 지우기</button>
+      <span class="spacer"></span>
+      <button class="btn small hotline" id="dSubmit" type="button">제출</button>
+    </div>
+    <p class="hint center" id="dNote"></p>
+  </section>
+
+  <!-- GUESS -->
+  <section class="screen" id="guess" hidden>
+    <div class="qhead"><span id="gStep"></span><span class="left" id="gLeft"></span></div>
+    <div class="timer"><i id="gBar"></i></div>
+    <p class="prompt">앞사람 그림이에요. 뭘 그린 걸까요?</p>
+    <div class="canvasWrap"><img id="gImg" alt="앞사람이 그린 그림"><p class="sub" id="gNoImg" hidden>앞사람이 시간 안에 그림을 못 냈어요. 떠오르는 음식이나 상품을 아무거나 적어 주세요.</p></div>
+    <label class="field" for="gText">내 추측<input id="gText" type="text" maxlength="30" placeholder="예: 탄 삼겹살" autocomplete="off"></label>
+    <button class="btn hot" id="gSubmit" type="button">제출</button>
+    <p class="hint center" id="gNote"></p>
+  </section>
+
+  <!-- WAIT (handing off / watching / collected) -->
+  <section class="screen center" id="wait" hidden>
+    <span class="eyebrow" id="wEyebrow"></span>
+    <h1 class="mid" id="wTitle"></h1>
+    <p class="sub" id="wSub"></p>
+    <div class="progress" id="wProg" hidden><i id="wBar"></i></div>
+  </section>
+
+  <!-- VOTE: 모든 스케치북 요약 → 눌러서 펼쳐 보기 -->
+  <section class="screen" id="show" hidden>
+    <div class="qhead"><span id="sVotes"></span><span class="left" id="sLeft"></span></div>
+    <div class="timer"><i id="sBar"></i></div>
+    <p class="prompt">제시어마다 한 줄씩 있어요. 옆으로 넘겨 보면서 칸마다 <b class="inl">👑 띵작</b> 또는 <b class="inl">💩 망작</b>을 눌러 주세요. 누가 그렸는지는 결과 발표 때 공개돼요!</p>
+    <div class="lanes" id="lanes"></div>
+    <p class="err" id="voteErr" hidden></p>
+  </section>
+
+  <!-- RESULT -->
+  <section class="screen center" id="result" hidden>
+    <span class="eyebrow">이번 판 결과</span>
+    <div class="podium">
+      <div class="tier top"><span class="tlabel">상위 <b id="kTop"></b>명</span><div class="losers" id="topList"></div></div>
+      <div class="tier bottom"><span class="tlabel">하위 <b id="kBot"></b>명</span><div class="losers" id="botList"></div></div>
+    </div>
+    <p class="hint" id="tieNote" hidden></p>
+    <ol class="board" id="finalBoard"></ol>
+    <div class="panel" id="rBooks">
+      <h2>누가 그렸을까? 스케치북 다시 보기</h2>
+      <div class="lanes" id="rLanes"></div>
+    </div>
+  </section>
+
+  <!-- 진행자가 그리기·추측 중일 때: 메뉴 대신 아래에 작게 -->
+  <div class="hostbar" id="hostBar" hidden>
+    <span class="stat" id="hbStat"></span>
+    <button class="btn small ghost" id="hbCancel" type="button">게임 중단하기</button>
+  </div>
+
+  <!-- 지난 게임 결과 -->
+  <section class="panel hist" id="history" hidden>
+    <h2>지난 게임 결과</h2>
+    <ol class="histList" id="histList"></ol>
+  </section>
+</div>
