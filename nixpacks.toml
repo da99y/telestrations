@@ -1,0 +1,11 @@
+[phases.install]
+cmds = [
+  "npm --prefix app/bbq-telestration ci --include=dev",
+  "npm --prefix api/bbq-telestration install"
+]
+
+[phases.build]
+cmds = ["npm --prefix app/bbq-telestration run build:standalone"]
+
+[start]
+cmd = "node api/bbq-telestration/dev-server.mjs"
