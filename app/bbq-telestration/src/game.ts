@@ -324,7 +324,7 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
     for (let s = 1; s <= total; s++) {
       const e = b.entries.find((x) => x.step === s), kindLabel = s % 2 === 1 ? '그림' : '추측';
       if (!e) { cards.push(`<li class=”slide”><span class=”lbl”>${s}칸 · ${kindLabel}</span><p class=”said missing”>시간 안에 못 냈어요</p></li>`); continue; }
-      const body = e.kind === 'draw' ? `<img src=”${esc(e.content)}” alt=”${s}칸 그림” loading=”lazy”>` : `<p class=”said”>”${esc(e.content)}”</p>`;
+      const body = e.kind === 'draw' ? `<div class=”imgWrap”><img src=”${esc(e.content)}” alt=”${s}칸 그림” loading=”lazy” onerror=”this.parentNode.dataset.err='1'”></div>` : `<p class=”said”>”${esc(e.content)}”</p>`;
       const who = e.authorNick ? `<b>${esc(e.authorNick)}</b>의 ${kindLabel}` : e.mine ? `<b>내</b> ${kindLabel}` : kindLabel;
       const foot = e.matched ? '<div class=”matched”>정답! ✓</div>' : '';
       cards.push(`<li class=”slide”><span class=”lbl”>${s}칸 · ${who}</span>${body}${foot}</li>`);
