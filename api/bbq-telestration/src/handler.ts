@@ -194,7 +194,7 @@ function expireLobby(env: Env, g: Game, now: number): Game | null {
   if (!humans.length) return g;
   const seen: Record<number, number> = {};
   env.db.query(`SELECT seat_id, seen_at FROM bbq_telestration__presence WHERE game_id = $1`, [g.id]).rows.forEach((r) => { seen[Number(r.seat_id)] = Number(r.seen_at); });
-  if (humans.some((p) => (seen[p.id] ?? 0) >= now - LOBBY_IDLE_MS)) return g;
+  if (humans.some((p) => Math.max(seen[p.id] ?? 0, p.joinedAt) >= now - LOBBY_IDLE_MS)) return g; // 막 참가해서 아직 화면 기록이 없는 사람도 있는 걸로 친다
   env.db.query(`UPDATE bbq_telestration__matches SET status = $1 WHERE id = $2 AND status = $3`, ['cancelled', g.id, 'lobby']);
   return currentGame(env);
 }
