@@ -187,7 +187,19 @@ function submittedCount(env: Env, gameId: number, step: number) {
 }
 
 // 시간이 끝났거나(+넘김) 전원이 냈으면 다음 칸(또는 투표)으로 넘긴다. cur_step 비교 UPDATE 라 동시에 여러 요청이 와도 한 번만 넘어간다.
+// 모집 중인 판은 참가자가 모두 LOBBY_IDLE_MS 넘게 화면에 없으면 버려진 걸로 보고 취소한다(진행자가 사라져도 다음 판을 열 수 있게).
+const LOBBY_IDLE_MS = 30 * 1000;
+function expireLobby(env: Env, g: Game, now: number): Game | null {
+  const humans = playersOf(env, g.id).filter((p) => !p.key.startsWith('bot-'));
+  if (!humans.length) return g;
+  const seen: Record<number, number> = {};
+  env.db.query(`SELECT seat_id, seen_at FROM bbq_telestration__presence WHERE game_id = $1`, [g.id]).rows.forEach((r) => { seen[Number(r.seat_id)] = Number(r.seen_at); });
+  if (humans.some((p) => (seen[p.id] ?? 0) >= now - LOBBY_IDLE_MS)) return g;
+  env.db.query(`UPDATE bbq_telestration__matches SET status = $1 WHERE id = $2 AND status = $3`, ['cancelled', g.id, 'lobby']);
+  return currentGame(env);
+}
 function advance(env: Env, g: Game | null, now: number): Game | null {
+  if (g && g.status === 'lobby') return expireLobby(env, g, now);
   if (!g || g.status !== 'running' || g.stepStart == null || now < g.stepStart) return g;
   const k = g.curStep, end = g.stepStart + durOf(g, k);
   const timeUp = now >= end + BUFFER_MS;
