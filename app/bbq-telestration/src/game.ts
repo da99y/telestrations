@@ -378,6 +378,7 @@ function renderHost(ph: Phase) {
   $('#hTeam').hidden = !isTeam || ph.kind !== 'lobby';
   if (isTeam && ph.kind === 'lobby') renderTeamAssign();
   $('#hBots').hidden = ph.kind !== 'lobby';
+  $('#hCopy').hidden = ph.kind !== 'lobby';
   const main = $<HTMLButtonElement>('#hMain');
   main.hidden = ph.kind !== 'lobby';
   const teamUnassigned = ph.kind === 'lobby' && st!.game?.mode === 'team'
@@ -595,6 +596,12 @@ function bind() {
     if (meOf()) void hostCall('start'); else confirmTwice('start', () => void hostCall('start'));
   });
   $('#hCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
+  $('#hCopy').addEventListener('click', async () => {
+    const btn = $('#hCopy'), url = location.origin + location.pathname;
+    try { await navigator.clipboard.writeText(url); btn.textContent = '복사했어요!'; }
+    catch { btn.textContent = url; } // 복사 권한이 없으면 주소를 그대로 보여 준다
+    setTimeout(() => { btn.textContent = '게임 링크 복사'; }, 2000);
+  });
   $('#hbCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
 }
 

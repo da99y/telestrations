@@ -188,7 +188,7 @@ function submittedCount(env: Env, gameId: number, step: number) {
 
 // 시간이 끝났거나(+넘김) 전원이 냈으면 다음 칸(또는 투표)으로 넘긴다. cur_step 비교 UPDATE 라 동시에 여러 요청이 와도 한 번만 넘어간다.
 // 모집 중인 판은 참가자가 모두 LOBBY_IDLE_MS 넘게 화면에 없으면 버려진 걸로 보고 취소한다(진행자가 사라져도 다음 판을 열 수 있게).
-const LOBBY_IDLE_MS = 30 * 1000;
+const LOBBY_IDLE_MS = 5 * 60 * 1000;
 function expireLobby(env: Env, g: Game, now: number): Game | null {
   const humans = playersOf(env, g.id).filter((p) => !p.key.startsWith('bot-'));
   if (!humans.length) return g;
