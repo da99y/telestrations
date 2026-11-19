@@ -1,6 +1,6 @@
 <div class="app">
   <header>
-    <a class="back" href="/app/bbq-telestration/" onclick="event.preventDefault();location.reload()">← 게임 메뉴</a>
+    <a class="back" href="/app/bbq-telestration/" id="backLink">← 게임 메뉴</a>
     <span class="eyebrow">ORDER GROWTH · MINI GAMES</span>
     <h1>그림 그리고 <em>맞추기</em></h1>
   </header>
@@ -51,6 +51,15 @@
     <span class="hint">이 게임을 진행할 사람이 아직 없어요.</span>
     <button class="btn small" id="claimHost" type="button">내가 진행자 하기</button>
   </div>
+
+  <!-- ROLE SELECT -->
+  <section class="screen" id="roleSel" hidden>
+    <div class="panel">
+      <h2>어떻게 참여할까요?</h2>
+      <button class="btn hot" id="roleHost" type="button">진행자</button>
+      <button class="btn" id="roleGuest" type="button">참가자</button>
+    </div>
+  </section>
 
   <!-- LOADING / NOTICE -->
   <section class="screen" id="notice">
@@ -139,6 +148,12 @@
       <div class="lanes" id="rLanes"></div>
     </div>
   </section>
+
+  <!-- 시작 카운트다운 -->
+  <div class="countdown" id="countdown" hidden>
+    <p class="cdSub" id="cdSub">곧 시작해요</p>
+    <div class="cdNum" id="cdNum"></div>
+  </div>
 
   <!-- 진행자가 그리기·추측 중일 때: 메뉴 대신 아래에 작게 -->
   <div class="hostbar" id="hostBar" hidden>

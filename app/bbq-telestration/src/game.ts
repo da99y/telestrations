@@ -26,6 +26,7 @@ type BookEntry = { id: number; step: number; kind: string; content: string; mine
 const BASE = '/api/bbq-telestration';
 const POLL_MS = 1500;
 const KEY_STORAGE = 'telestration-key';
+const ROLE_STORAGE = 'telestration-role';
 const NICK_STORAGE = 'telestration-nick';
 const COLORS = [
   { c: '#1f1a17', n: '검정' }, { c: '#e23f2c', n: '빨강' }, { c: '#ff8a3d', n: '주황' }, { c: '#f2c230', n: '노랑' },
@@ -60,6 +61,7 @@ let st: State | null = null;
 let offset = 0; // 서버 시계 - 내 시계
 let polling = false, failures = 0, renaming = false, lastKey = '';
 let confirmAction = '';
+let role = load(ROLE_STORAGE); // 'host' | 'guest' | '' (아직 안 고름)
 const now = () => Date.now() + offset;
 
 async function poll() {
@@ -94,10 +96,10 @@ const meOf = () => st?.players.find((p) => p.id === st?.meId);
 const seatedCount = () => (st?.players ?? []).filter((p) => p.seat != null).length;
 
 /* ---------- screens ---------- */
-const SCREENS = ['notice', 'lobby', 'draw', 'guess', 'wait', 'result'];
+const SCREENS = ['roleSel', 'notice', 'lobby', 'draw', 'guess', 'wait', 'result'];
 let shown = 'notice';
 function show(id: string) {
-  document.getElementById('history')?.toggleAttribute('data-off', ['draw','guess','wait'].includes(id));
+  document.getElementById('history')?.toggleAttribute('data-off', ['roleSel','draw','guess','wait'].includes(id));
   if (shown === id) return;
   shown = id; SCREENS.forEach((s) => ($('#' + s).hidden = s !== id)); window.scrollTo({ top: 0 });
   if (st) renderHost(phase());
@@ -106,10 +108,15 @@ function notice(t: string, b: string) { $('#nTitle').textContent = t; $('#nBody'
 
 function render() {
   if (!st) return;
-  void loadHistory();
   const ph = phase();
   lastKey = phaseKey(ph);
+  if (role !== 'host' && role !== 'guest') {
+    $('#host').hidden = true; $('#hostBar').hidden = true; $('#claimBox').hidden = true; $('#countdown').hidden = true;
+    show('roleSel'); return;
+  }
+  void loadHistory();
   renderHost(ph);
+  renderCountdown(ph);
   runBots(ph);
   const seated = meOf()?.seat != null;
 
@@ -132,10 +139,11 @@ function renderLobby(ph: Phase) {
   $('#waitTitle').textContent = ph.kind === 'starting' && !me ? '곧 시작해요 · 이번 판은 구경 모드' : running ? '이번 판은 이미 시작했어요' : '아직 열린 판이 없어요';
   $('#waitSub').textContent = st?.host && (running || ph.kind === 'starting')
     ? '진행자님은 이번 판에 참가하지 않았어요. 위 진행자 메뉴에서 진행 상황을 볼 수 있고, 다 그리면 스케치북 구경과 결과는 같이 볼 수 있어요.'
-    : running || ph.kind === 'starting' ? '다 그리고 나면 스케치북 구경은 같이 할 수 있어요. 다음 판에 꼭 함께해요!' : '진행자가 새 판을 열면 여기서 바로 참가할 수 있어요.';
+    : running || ph.kind === 'starting' ? '다 그리고 나면 스케치북 구경은 같이 할 수 있어요. 다음 판에 꼭 함께해요!' : role === 'guest' ? '진행자가 판을 열 때까지 기다려 주세요. 열리면 여기서 바로 참가할 수 있어요.' : '진행자가 새 판을 열면 여기서 바로 참가할 수 있어요.';
   $('#joinTitle').textContent = renaming ? '별명 바꾸기' : '별명으로 참가하기';
   $('#join').textContent = renaming ? '바꾸기' : '참가하기';
   if (me) $('#joinedTitle').textContent = ph.kind === 'starting' ? `${Math.ceil(ph.left)}초 뒤 시작! 펜 준비하세요` : `${me.nick} 님, 참가 완료!`;
+  $('#joinedSub').textContent = role === 'guest' ? '진행자가 시작하면 카운트다운이 시작돼요.' : '진행자가 시작하면 이 화면이 바로 바뀌어요.';
   $('#cnt').textContent = list.length ? list.length + '명' : '';
   const isTeamMode = st?.game?.mode === 'team';
   $('#chips').innerHTML = list.length ? list.map((p) => {
@@ -358,9 +366,10 @@ function renderResult() {
 function renderHost(ph: Phase) {
   $('#claimBox').hidden = !st!.hostClaimable;
   // 진행자도 그리는 동안엔 메뉴가 그림판을 밀어내지 않게 숨긴다.
-  $('#host').hidden = !(st!.host || st!.canOpen) || shown === 'draw' || shown === 'guess';
-  if (!st!.host) $('#hostBar').hidden = true;
-  if (!st!.host && !st!.canOpen) return;
+  const asHost = role === 'host';
+  $('#host').hidden = !asHost || shown === 'draw' || shown === 'guess';
+  if (!asHost || !st!.host) $('#hostBar').hidden = true;
+  if (!asHost || (!st!.host && !st!.canOpen)) return;
   const g = st!.game, n = st!.players.length, seatedN = seatedCount();
   $('#hStat').textContent = ph.kind === 'none' ? '열린 판 없음'
     : ph.kind === 'lobby' ? `모집 중 · 난이도 ${TIER_LABEL[g?.tier ?? 'easy'] ?? '하'} · 참가 ${n}명${awayCount() ? ` · 자리 비움 ${awayCount()}명은 시작하면 빠져요` : ''}`
@@ -522,9 +531,18 @@ function runBots(ph: Phase) {
 }
 
 /* ---------- loop ---------- */
+function renderCountdown(ph: Phase) {
+  const on = (role === 'host' || role === 'guest') && ph.kind === 'starting';
+  $('#countdown').hidden = !on;
+  if (!on) return;
+  $('#cdNum').textContent = String(Math.max(1, Math.ceil(ph.left)));
+  $('#cdSub').textContent = meOf() || st?.host ? '펜 준비하세요!' : '이번 판은 구경 모드예요';
+}
+
 function tick() {
   if (!st?.game) return;
   const ph = phase(), key = phaseKey(ph);
+  renderCountdown(ph);
   if (key !== lastKey) { confirmAction = ''; render(); void poll(); return; }
   if (ph.kind === 'step' && ph.editing) {
     updateClock(ph);
@@ -595,6 +613,10 @@ function bind() {
     if (meOf()) void hostCall('start'); else confirmTwice('start', () => void hostCall('start'));
   });
   $('#hCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
+  const pick = (r: string) => () => { role = r; store(ROLE_STORAGE, r); render(); };
+  $('#roleHost').addEventListener('click', pick('host'));
+  $('#roleGuest').addEventListener('click', pick('guest'));
+  $('#backLink').addEventListener('click', (e) => { e.preventDefault(); store(ROLE_STORAGE, ''); location.reload(); });
   $('#hbCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
 }
 
