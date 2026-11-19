@@ -336,7 +336,7 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
   const total = steps - 1;
   return list.map((b) => {
     const owner = b.ownerNick ? `${esc(b.ownerNick)}의 스케치북` : `스케치북 ${b.idx + 1}`;
-    const cards = [`<li class="slide word"><span class="lbl">처음 제시어</span><b>${esc(b.word)}</b><span class="lbl">${owner} · 옆으로 넘겨 보세요 →</span></li>`];
+    const cards: string[] = [];
     for (let s = 1; s <= total; s++) {
       const e = b.entries.find((x) => x.step === s), kindLabel = s % 2 === 1 ? '그림' : '추측';
       if (!e) { cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${kindLabel}</span><p class="said missing">시간 안에 못 냈어요</p></li>`); continue; }
@@ -345,6 +345,8 @@ function lanesHTML(list: LaneBook[], steps = st!.game!.steps) {
       const foot = e.matched ? '<div class="matched">정답! ✓</div>' : '';
       cards.push(`<li class="slide"><span class="lbl">${s}칸 · ${who}</span>${body}${foot}</li>`);
     }
+    // 제시어 카드는 맨 마지막에 둬서, 그림·추측을 먼저 보고 마지막에 정답을 확인하게 한다.
+    cards.push(`<li class="slide word"><span class="lbl">처음 제시어</span><b>${esc(b.word)}</b><span class="lbl">${owner}</span></li>`);
     const tm = b.team === 'A' || b.team === 'B' ? b.team : '';
     return `<section class="lane${tm ? ' team ' + tm : ''}"><h3><span>${b.idx + 1}</span>${esc(b.word)}${tm ? `<span class="teamBadge ${tm}">${tm}팀</span>` : ''}</h3><ol class="track">${cards.join('')}</ol></section>`;
   }).join('');
