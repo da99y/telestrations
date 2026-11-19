@@ -30,7 +30,7 @@ const ROLE_STORAGE = 'telestration-role';
 const NICK_STORAGE = 'telestration-nick';
 const COLORS = [
   { c: '#1f1a17', n: '검정' }, { c: '#e23f2c', n: '빨강' }, { c: '#ff8a3d', n: '주황' }, { c: '#f2c230', n: '노랑' },
-  { c: '#4c9a36', n: '초록' }, { c: '#2b6f8c', n: '파랑' }, { c: '#8a4426', n: '갈색' }, { c: '#ffffff', n: '지우개' },
+  { c: '#4c9a36', n: '초록' }, { c: '#2b6f8c', n: '파랑' }, { c: '#7b4fb8', n: '보라' }, { c: '#8a4426', n: '갈색' }, { c: '#ffffff', n: '지우개' },
 ];
 const SIZES = [4, 10, 22];
 const TIER_LABEL: Record<string, string> = { easy: '하', medium: '중', hard: '상', core: '코어전용' };
