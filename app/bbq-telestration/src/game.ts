@@ -62,6 +62,14 @@ let offset = 0; // 서버 시계 - 내 시계
 let polling = false, failures = 0, renaming = false, lastKey = '';
 let confirmAction = '';
 let role = load(ROLE_STORAGE); // 'host' | 'guest' | '' (아직 안 고름)
+// 진행자가 공유한 링크(?join=1)로 들어오면 역할 선택 없이 바로 참가자로 들어간다.
+try {
+  const u = new URL(location.href);
+  if (u.searchParams.has('join')) {
+    role = 'guest'; store(ROLE_STORAGE, role);
+    u.searchParams.delete('join'); history.replaceState(null, '', u.pathname + u.search + u.hash);
+  }
+} catch { /* 주소를 못 읽으면 역할 선택 화면으로 */ }
 const now = () => Date.now() + offset;
 
 async function poll() {
@@ -615,7 +623,7 @@ function bind() {
   });
   $('#hCancel').addEventListener('click', () => confirmTwice('cancel', () => void hostCall('cancel')));
   $('#hCopy').addEventListener('click', async () => {
-    const btn = $('#hCopy'), url = location.origin + location.pathname;
+    const btn = $('#hCopy'), url = location.origin + location.pathname + '?join=1';
     try { await navigator.clipboard.writeText(url); btn.textContent = '복사했어요!'; }
     catch { btn.textContent = url; } // 복사 권한이 없으면 주소를 그대로 보여 준다
     setTimeout(() => { btn.textContent = '게임 링크 복사'; }, 2000);
